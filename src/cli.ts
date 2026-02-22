@@ -12,7 +12,7 @@ import {
   getSubagentChoices,
 } from "./registry.js";
 
-const VERSION = "2.1.0";
+const VERSION = "2.2.0";
 const PLUGIN_NAME = "cortex-agents";
 
 const __filename = fileURLToPath(import.meta.url);
