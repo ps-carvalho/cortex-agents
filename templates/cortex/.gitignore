@@ -1,0 +1,12 @@
+# Keep plans (they're valuable documentation)
+!plans/
+
+# Ignore session files (local context)
+sessions/
+
+# Ignore local config overrides
+config.local.json
+
+# OS files
+.DS_Store
+Thumbs.db

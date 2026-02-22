@@ -1,7 +1,7 @@
 # cortex-agents
 
 <p align="center">
-  <strong>Enhanced agents for OpenCode with k2p5 model, worktree workflow, and plan persistence</strong>
+  <strong>Model-agnostic agents for OpenCode with interactive model configuration, worktree workflow, and plan persistence</strong>
 </p>
 
 <p align="center">
@@ -21,9 +21,8 @@
 
 <p align="center">
   <a href="#quick-start">Quick Start</a> •
+  <a href="#model-configuration">Model Configuration</a> •
   <a href="#features">Features</a> •
-  <a href="#installation">Installation</a> •
-  <a href="#usage">Usage</a> •
   <a href="#agents">Agents</a> •
   <a href="#tools">Tools</a>
 </p>
@@ -36,26 +35,95 @@
 # 1. Install the plugin
 npx cortex-agents install
 
-# 2. Initialize cortex in your project
-cortex_init
+# 2. Choose your models interactively
+npx cortex-agents configure
 
-# 3. Check your setup
-cortex_status
+# 3. Restart OpenCode — done!
 ```
 
-That's it! The enhanced agents are now available in OpenCode.
+---
+
+## Model Configuration
+
+Cortex agents are **model-agnostic**. You choose which models to use by running the interactive configure command:
+
+```bash
+npx cortex-agents configure
+```
+
+You'll be prompted to select:
+
+1. **Primary model** — for `build`, `plan`, and `debug` agents (complex tasks)
+2. **Subagent model** — for `fullstack`, `testing`, `security`, and `devops` agents (focused tasks)
+
+### Example
+
+```
+$ npx cortex-agents configure
+
+🔧 Cortex Agents — Model Configuration
+
+Primary agents (build, plan, debug) handle complex tasks.
+Use your best available model.
+
+? Select model for PRIMARY agents:
+❯ Claude Sonnet 4    (anthropic)   Best balance of intelligence and speed
+  Claude Opus 4      (anthropic)   Most capable, best for complex architecture
+  GPT-4.1            (openai)      Fast multimodal model
+  o3                 (openai)      Advanced reasoning model
+  Gemini 2.5 Pro     (google)      Large context window, strong reasoning
+  Kimi K2P5          (kimi)        Optimized for code generation
+  Enter custom model ID
+
+✓ Primary model: anthropic/claude-sonnet-4-20250514
+
+? Select model for SUBAGENTS:
+❯ Claude 3.5 Haiku   (anthropic)   Fast and cost-effective for focused tasks
+  o4 Mini            (openai)      Fast reasoning, cost-effective
+  Gemini 2.5 Flash   (google)      Fast and efficient
+  Same as primary
+  Enter custom model ID
+
+✓ Subagent model: anthropic/claude-haiku-3.5
+
+✓ Configuration saved to ~/.config/opencode/opencode.json
+```
+
+### Supported Providers
+
+| Provider | Premium | Standard | Fast |
+|----------|---------|----------|------|
+| **Anthropic** | Claude Opus 4 | Claude Sonnet 4 | Claude 3.5 Haiku |
+| **OpenAI** | o3 | GPT-4.1 | o4 Mini |
+| **Google** | Gemini 2.5 Pro | — | Gemini 2.5 Flash |
+| **xAI** | Grok 3 | — | Grok 3 Mini |
+| **DeepSeek** | DeepSeek R1 | — | DeepSeek Chat |
+| **Kimi** | — | Kimi K2P5 | — |
+
+> Don't see your provider? Select **"Enter custom model ID"** and enter any `provider/model` identifier.
+
+### Reconfigure or Reset
+
+```bash
+# Change models at any time
+npx cortex-agents configure
+
+# Reset to OpenCode defaults (removes model config)
+npx cortex-agents configure --reset
+```
 
 ---
 
 ## Features
 
-- 🌳 **Worktree Workflow** - Create isolated development environments with git worktrees
-- 📋 **Plan Persistence** - Save implementation plans with mermaid diagrams to `.cortex/plans/`
-- 📝 **Session Management** - Record key decisions and context in `.cortex/sessions/`
-- 🔄 **Pre-Implementation Workflow** - Agents ask about branch/worktree strategy before making changes
-- 🎯 **Agent Handoff** - Seamless transition between Plan → Build → Debug agents
-- 🔧 **Git Integration** - Built-in branch and worktree management tools
-- 📚 **Skills System** - Domain-specific knowledge for web dev, testing, security, and more
+- 🤖 **Model-Agnostic** — Works with any provider: Anthropic, OpenAI, Google, xAI, DeepSeek, Kimi, and more
+- 🔧 **Interactive Configuration** — `npx cortex-agents configure` to select models with arrow-key menus
+- 🌳 **Worktree Workflow** — Create isolated development environments with git worktrees
+- 📋 **Plan Persistence** — Save implementation plans with mermaid diagrams to `.cortex/plans/`
+- 📝 **Session Management** — Record key decisions and context in `.cortex/sessions/`
+- 🔄 **Pre-Implementation Workflow** — Agents ask about branch/worktree strategy before making changes
+- 🎯 **Agent Handoff** — Seamless transition between Plan → Build → Debug agents
+- 📚 **Skills System** — Domain-specific knowledge for web dev, testing, security, and more
 
 ---
 
@@ -72,67 +140,39 @@ Add the plugin to your `opencode.json`:
 }
 ```
 
-OpenCode will auto-install via Bun at startup.
+Then configure your models:
+
+```bash
+npx cortex-agents configure
+```
 
 ### Option 2: Use the CLI Helper
 
 ```bash
 # Install and configure
 npx cortex-agents install
-
-# Check status
-npx cortex-agents status
+npx cortex-agents configure
 ```
-
-This adds the plugin to your global `~/.config/opencode/opencode.json`.
 
 ### Option 3: Global npm Install
 
 ```bash
-# Install globally
 npm install -g cortex-agents
-
-# Configure
 cortex-agents install
+cortex-agents configure
 ```
 
 ---
 
-## Usage
-
-### CLI Commands
+## CLI Commands
 
 ```bash
-npx cortex-agents install       # Add to opencode.json config
-npx cortex-agents uninstall     # Remove from config
-npx cortex-agents status        # Check installation status
-npx cortex-agents help          # Show help
-```
-
-### Basic Workflow
-
-```bash
-# Initialize cortex in your project
-cortex_init
-
-# Check your branch status
-branch_status
-
-# Create a feature branch or worktree
-branch_create my-feature feature
-# or
-worktree_create my-feature feature
-
-# Save an implementation plan
-plan_save "Add user authentication" feature "- [ ] Setup auth middleware
-- [ ] Create login endpoint
-- [ ] Add session management"
-
-# List all plans
-plan_list
-
-# After completing work, save session summary
-session_save "Implemented OAuth2 authentication" ["Used Passport.js" "JWT tokens for sessions"]
+npx cortex-agents install              # Add plugin to opencode.json
+npx cortex-agents configure            # Interactive model selection
+npx cortex-agents configure --reset    # Reset to OpenCode default models
+npx cortex-agents uninstall            # Remove plugin, agents, skills, and model config
+npx cortex-agents status               # Show installation and model status
+npx cortex-agents help                 # Show help
 ```
 
 ---
@@ -141,7 +181,7 @@ session_save "Implemented OAuth2 authentication" ["Used Passport.js" "JWT tokens
 
 ### Primary Agents
 
-These agents are automatically enhanced when you install cortex-agents:
+These agents handle complex tasks and use your **primary model**:
 
 | Agent | Description | Best For |
 |-------|-------------|----------|
@@ -151,7 +191,7 @@ These agents are automatically enhanced when you install cortex-agents:
 
 ### Subagents (@mention)
 
-Call specialized subagents for specific tasks:
+These agents handle focused tasks and use your **subagent model**:
 
 | Agent | Description |
 |-------|-------------|
@@ -166,43 +206,28 @@ Call specialized subagents for specific tasks:
 
 All tools are bundled with the plugin and available automatically.
 
-### 🧠 Cortex Management
-
-Manage your project's `.cortex` directory:
-
+### Cortex Management
 - `cortex_init` - Initialize `.cortex` directory with config and templates
 - `cortex_status` - Check cortex status (exists, plan count, session count)
 
-### 🌳 Worktree Management
-
-Work in parallel with git worktrees:
-
+### Worktree Management
 - `worktree_create <name> <type>` - Create worktree in `../.worktrees/`
 - `worktree_list` - List all worktrees
 - `worktree_remove <name>` - Remove worktree (after merging)
 - `worktree_open <name>` - Get command to open terminal in worktree
 
-### 🌿 Branch Management
-
-Streamlined git branch operations:
-
+### Branch Management
 - `branch_create <name> <type>` - Create feature/bugfix/hotfix/refactor/docs/test branch
 - `branch_status` - Get current branch, check for uncommitted changes, detect protected branches
 - `branch_switch <branch>` - Switch to existing branch
 
-### 📋 Plan Management
-
-Persist implementation plans:
-
+### Plan Management
 - `plan_save <title> <type> <content>` - Save plan to `.cortex/plans/`
 - `plan_list [type]` - List saved plans (optionally filter by type)
 - `plan_load <filename>` - Load a plan
 - `plan_delete <filename>` - Delete a plan
 
-### 📝 Session Management
-
-Record session summaries:
-
+### Session Management
 - `session_save <summary> [decisions]` - Save session summary with key decisions
 - `session_list [limit]` - List recent sessions
 - `session_load <filename>` - Load a session summary
@@ -213,19 +238,14 @@ Record session summaries:
 
 Load domain-specific knowledge with the `skill` tool:
 
-| Skill | Description | File |
-|-------|-------------|------|
-| **git-workflow** | Branching strategies, worktree management, collaborative workflows | `git-workflow/SKILL.md` |
-| **web-development** | Full-stack patterns and best practices | `web-development/SKILL.md` |
-| **testing-strategies** | Comprehensive testing approaches | `testing-strategies/SKILL.md` |
-| **security-hardening** | Security best practices and patterns | `security-hardening/SKILL.md` |
-| **deployment-automation** | CI/CD pipelines and infrastructure | `deployment-automation/SKILL.md` |
-| **code-quality** | Refactoring patterns and maintainability | `code-quality/SKILL.md` |
-
-**Usage:**
-```
-skill("git-workflow")
-```
+| Skill | Description |
+|-------|-------------|
+| **git-workflow** | Branching strategies, worktree management, collaborative workflows |
+| **web-development** | Full-stack patterns and best practices |
+| **testing-strategies** | Comprehensive testing approaches |
+| **security-hardening** | Security best practices and patterns |
+| **deployment-automation** | CI/CD pipelines and infrastructure |
+| **code-quality** | Refactoring patterns and maintainability |
 
 ---
 
@@ -236,7 +256,7 @@ skill("git-workflow")
 ```
 User: "I want to add user authentication"
 
-Plan Agent (read-only):
+Plan Agent:
 ├── Analyzes codebase structure
 ├── Creates implementation plan with mermaid diagrams
 ├── Saves to .cortex/plans/2024-02-22-feature-user-auth.md
@@ -246,32 +266,38 @@ User: "Yes"
 
 Build Agent:
 ├── Loads plan from .cortex/plans/
-├── Checks git status (detects on main branch)
+├── Checks git status (detects protected branch)
 ├── Asks: "Create branch or worktree?"
-├── User: "Create branch"
 ├── Creates feature/user-authentication
 ├── Implements following the plan
 └── Saves session summary with key decisions
 ```
 
-### Hotfix with Worktree
-
-```
-User: "Fix the critical login bug"
-
-debug Agent:
-├── Detects protected branch (main)
-├── Creates worktree: hotfix/login-bug
-├── Opens new terminal in worktree
-├── Fixes the bug
-├── Commits and pushes
-├── Removes worktree after merge
-└── Records session summary
-```
-
 ---
 
-## .cortex Directory Structure
+## Configuration
+
+### opencode.json (after running `configure`)
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "plugin": ["cortex-agents"],
+  "agent": {
+    "build": { "model": "anthropic/claude-sonnet-4-20250514" },
+    "plan": { "model": "anthropic/claude-sonnet-4-20250514" },
+    "debug": { "model": "anthropic/claude-sonnet-4-20250514" },
+    "fullstack": { "model": "anthropic/claude-haiku-3.5" },
+    "testing": { "model": "anthropic/claude-haiku-3.5" },
+    "security": { "model": "anthropic/claude-haiku-3.5" },
+    "devops": { "model": "anthropic/claude-haiku-3.5" }
+  }
+}
+```
+
+> Power users can edit `opencode.json` directly for per-agent model control.
+
+### .cortex Directory
 
 ```
 <project-root>/
@@ -288,35 +314,14 @@ debug Agent:
 
 ## Branch Naming Convention
 
-| Type | Prefix | Example | Use Case |
-|------|--------|---------|----------|
-| Feature | `feature/` | `feature/user-authentication` | New functionality |
-| Bugfix | `bugfix/` | `bugfix/login-validation` | Non-critical bugs |
-| Hotfix | `hotfix/` | `hotfix/security-patch` | Critical production fixes |
-| Refactor | `refactor/` | `refactor/api-cleanup` | Code restructuring |
-| Docs | `docs/` | `docs/api-reference` | Documentation only |
-| Test | `test/` | `test/e2e-coverage` | Test additions |
-
----
-
-## Configuration
-
-### Default Settings
-
-- **Default Model**: `kimi-for-coding/k2p5`
-- **Worktree Location**: `../.worktrees/`
-- **Plans Directory**: `.cortex/plans/`
-- **Sessions Directory**: `.cortex/sessions/`
-
-### opencode.json Example
-
-```json
-{
-  "$schema": "https://opencode.ai/config.json",
-  "plugin": ["cortex-agents"],
-  "model": "kimi-for-coding/k2p5"
-}
-```
+| Type | Prefix | Example |
+|------|--------|---------|
+| Feature | `feature/` | `feature/user-authentication` |
+| Bugfix | `bugfix/` | `bugfix/login-validation` |
+| Hotfix | `hotfix/` | `hotfix/security-patch` |
+| Refactor | `refactor/` | `refactor/api-cleanup` |
+| Docs | `docs/` | `docs/api-reference` |
+| Test | `test/` | `test/e2e-coverage` |
 
 ---
 
@@ -338,8 +343,6 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
-Please make sure to update tests as appropriate and follow the existing code style.
-
 ---
 
 ## License
@@ -348,14 +351,6 @@ Please make sure to update tests as appropriate and follow the existing code sty
 
 ---
 
-## Support
-
-- 📖 [Documentation](https://github.com/your-org/cortex-agents#readme)
-- 🐛 [Issue Tracker](https://github.com/your-org/cortex-agents/issues)
-- 💬 [Discussions](https://github.com/your-org/cortex-agents/discussions)
-
----
-
 <p align="center">
-  Built with ❤️ for the <a href="https://opencode.ai">OpenCode</a> community
+  Built for the <a href="https://opencode.ai">OpenCode</a> community
 </p>

@@ -1,0 +1,176 @@
+import { tool } from "@opencode-ai/plugin";
+import * as fs from "fs";
+import * as path from "path";
+
+const CORTEX_DIR = ".cortex";
+const DEFAULT_CONFIG = {
+  version: "1.0.0",
+  worktree: {
+    root: "../.worktrees",
+    autoCleanup: false,
+  },
+  branches: {
+    protected: ["main", "master", "develop"],
+    defaultType: "feature",
+  },
+  plans: {
+    namingPattern: "{date}-{type}-{slug}",
+    includeMermaid: true,
+  },
+  sessions: {
+    retention: 30,
+    includeDecisions: true,
+  },
+};
+
+const GITIGNORE_CONTENT = `# Keep plans (they're valuable documentation)
+!plans/
+
+# Ignore session files (local context)
+sessions/
+
+# Ignore local config overrides
+config.local.json
+`;
+
+const README_CONTENT = `# .cortex
+
+This directory contains project context for the Cortex development agents.
+
+## Structure
+
+- \`plans/\` - Saved implementation plans (version controlled)
+- \`sessions/\` - Session summaries (gitignored)
+- \`config.json\` - Project configuration
+
+## Plans
+
+Plans are saved by the Plan agent and can be loaded by Build/Debug agents.
+They include:
+- Architecture diagrams (mermaid)
+- Task breakdowns
+- Technical decisions
+
+## Sessions
+
+Session summaries capture key decisions made during development.
+They are gitignored by default but can be kept if needed.
+
+## Usage
+
+The Cortex agents will automatically use this directory for:
+- Saving implementation plans before coding
+- Recording session summaries with key decisions
+- Managing worktree and branch workflows
+`;
+
+export const init = tool({
+  description:
+    "Initialize .cortex directory in project root for plan storage, session history, and configuration",
+  args: {},
+  async execute(args, context) {
+    const cortexPath = path.join(context.worktree, CORTEX_DIR);
+    const plansPath = path.join(cortexPath, "plans");
+    const sessionsPath = path.join(cortexPath, "sessions");
+
+    // Check if already exists
+    if (fs.existsSync(cortexPath)) {
+      const hasConfig = fs.existsSync(path.join(cortexPath, "config.json"));
+      const hasPlans = fs.existsSync(plansPath);
+      const hasSessions = fs.existsSync(sessionsPath);
+
+      if (hasConfig && hasPlans && hasSessions) {
+        return `✓ .cortex directory already initialized at ${cortexPath}`;
+      }
+    }
+
+    // Create directories
+    fs.mkdirSync(plansPath, { recursive: true });
+    fs.mkdirSync(sessionsPath, { recursive: true });
+
+    // Create config.json
+    fs.writeFileSync(
+      path.join(cortexPath, "config.json"),
+      JSON.stringify(DEFAULT_CONFIG, null, 2)
+    );
+
+    // Create .gitignore
+    fs.writeFileSync(path.join(cortexPath, ".gitignore"), GITIGNORE_CONTENT);
+
+    // Create README.md
+    fs.writeFileSync(path.join(cortexPath, "README.md"), README_CONTENT);
+
+    // Create .gitkeep in plans to ensure it's tracked
+    fs.writeFileSync(path.join(plansPath, ".gitkeep"), "");
+
+    return `✓ Initialized .cortex directory at ${cortexPath}
+
+Created:
+- .cortex/config.json (configuration)
+- .cortex/plans/ (implementation plans)
+- .cortex/sessions/ (session summaries)
+- .cortex/.gitignore (ignores sessions, keeps plans)
+- .cortex/README.md (documentation)
+
+Plans will be version controlled. Sessions are gitignored by default.`;
+  },
+});
+
+export const status = tool({
+  description:
+    "Check .cortex directory status - whether it exists, plan count, session count",
+  args: {},
+  async execute(args, context) {
+    const cortexPath = path.join(context.worktree, CORTEX_DIR);
+
+    if (!fs.existsSync(cortexPath)) {
+      return `✗ .cortex directory not found at ${cortexPath}
+
+Run cortex_init to initialize.`;
+    }
+
+    const plansPath = path.join(cortexPath, "plans");
+    const sessionsPath = path.join(cortexPath, "sessions");
+
+    let planCount = 0;
+    let sessionCount = 0;
+    let recentPlans: string[] = [];
+    let recentSessions: string[] = [];
+
+    if (fs.existsSync(plansPath)) {
+      const plans = fs
+        .readdirSync(plansPath)
+        .filter((f) => f.endsWith(".md"))
+        .sort()
+        .reverse();
+      planCount = plans.length;
+      recentPlans = plans.slice(0, 3);
+    }
+
+    if (fs.existsSync(sessionsPath)) {
+      const sessions = fs
+        .readdirSync(sessionsPath)
+        .filter((f) => f.endsWith(".md"))
+        .sort()
+        .reverse();
+      sessionCount = sessions.length;
+      recentSessions = sessions.slice(0, 3);
+    }
+
+    let output = `✓ .cortex directory found at ${cortexPath}
+
+Plans: ${planCount}`;
+
+    if (recentPlans.length > 0) {
+      output += `\n  Recent: ${recentPlans.join(", ")}`;
+    }
+
+    output += `\n\nSessions: ${sessionCount}`;
+
+    if (recentSessions.length > 0) {
+      output += `\n  Recent: ${recentSessions.join(", ")}`;
+    }
+
+    return output;
+  },
+});

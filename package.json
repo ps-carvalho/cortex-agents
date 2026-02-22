@@ -1,0 +1,59 @@
+{
+  "name": "cortex-agents",
+  "version": "2.0.0",
+  "description": "Model-agnostic agents for OpenCode - interactive model configuration, worktree workflow, plan persistence, and session management",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "cortex-agents": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    ".opencode"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "prepare": "npm run build",
+    "postinstall": "echo 'Run: npx cortex-agents install && npx cortex-agents configure'"
+  },
+  "keywords": [
+    "opencode",
+    "plugin",
+    "cortex",
+    "agents",
+    "skills",
+    "ai",
+    "coding",
+    "worktree",
+    "git",
+    "planning"
+  ],
+  "author": "",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-org/cortex-agents"
+  },
+  "homepage": "https://github.com/your-org/cortex-agents#readme",
+  "bugs": {
+    "url": "https://github.com/your-org/cortex-agents/issues"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "peerDependencies": {
+    "@opencode-ai/plugin": "^1.0.0"
+  },
+  "devDependencies": {
+    "@opencode-ai/plugin": "^1.0.0",
+    "@types/bun": "^1.3.9",
+    "@types/node": "^20.0.0",
+    "@types/prompts": "^2.4.9",
+    "bun-types": "^1.0.0",
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "prompts": "^2.4.2"
+  }
+}
