@@ -12,7 +12,7 @@ import {
   getSubagentChoices,
 } from "./registry.js";
 
-const VERSION = "2.0.0";
+const VERSION = "2.1.0";
 const PLUGIN_NAME = "cortex-agents";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -500,7 +500,8 @@ function status(): void {
 function help(): void {
   console.log(`${PLUGIN_NAME} v${VERSION}
 
-Cortex agents for OpenCode — worktree workflow, plan persistence, and session management.
+Cortex agents for OpenCode — agent handover notifications, mermaid documentation,
+worktree workflow, plan persistence, and session management.
 
 USAGE:
   npx ${PLUGIN_NAME} <command> [options]
@@ -532,6 +533,11 @@ INCLUDED TOOLS:
   branch_create, branch_status, branch_switch
   plan_save, plan_list, plan_load, plan_delete
   session_save, session_list, session_load
+  docs_init, docs_save, docs_list, docs_index  - mermaid documentation
+
+FEATURES:
+  Agent handover notifications  - Toast alerts when agents switch
+  Mermaid documentation system  - Auto-prompted docs with diagrams
 
 INCLUDED SKILLS:
   web-development, testing-strategies, security-hardening,
