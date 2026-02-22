@@ -135,6 +135,39 @@ describe('Calculator', () => {
 
 ## Testing Tools by Language
 
+### PHP / Laravel
+- **Pest** (recommended) — Elegant, expressive syntax built on PHPUnit
+- **PHPUnit** — Standard PHP testing framework
+- **Laravel Testing** — Built-in HTTP, database, queue, and mail testing
+- **Laravel Dusk** — Browser testing with ChromeDriver
+- **Mockery** — Mock objects for PHP
+- **Faker** — Realistic test data generation (built into Laravel factories)
+
+```php
+// Pest test (Laravel)
+it('creates a user via API', function () {
+    $response = $this->postJson('/api/users', [
+        'name' => 'John Doe',
+        'email' => 'john@example.com',
+    ]);
+
+    $response->assertStatus(201)
+             ->assertJsonStructure(['id', 'name', 'email']);
+
+    $this->assertDatabaseHas('users', ['email' => 'john@example.com']);
+});
+
+// Laravel model factory + test
+it('lists active users', function () {
+    User::factory()->count(3)->active()->create();
+    User::factory()->count(2)->inactive()->create();
+
+    $this->getJson('/api/users?status=active')
+         ->assertOk()
+         ->assertJsonCount(3, 'data');
+});
+```
+
 ### JavaScript/TypeScript
 - Jest or Vitest (unit)
 - React Testing Library (components)

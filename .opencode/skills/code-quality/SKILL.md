@@ -156,6 +156,14 @@ Sort alphabetically within groups.
 - Use interfaces for abstraction
 - Write table-driven tests
 
+### PHP
+- Follow PSR-12 coding standard
+- Use strict types (`declare(strict_types=1)`)
+- Leverage PHP 8+ features (enums, readonly, named args, match)
+- Use type declarations for params, returns, and properties
+- Follow Laravel conventions (if using Laravel)
+- Use dependency injection over facades in application code
+
 ### Rust
 - Run cargo fmt and clippy
 - Use Result/Option
@@ -208,6 +216,10 @@ Sort alphabetically within groups.
 ### Tools
 - **ESLint** - JavaScript/TypeScript
 - **Prettier** - Multi-language formatter
+- **PHP CS Fixer** - PHP formatter (PSR-12)
+- **Laravel Pint** - Laravel's opinionated PHP formatter (built on CS Fixer)
+- **PHPStan / Larastan** - PHP static analysis (levels 0-9)
+- **Psalm** - PHP static analysis with type inference
 - **Black** - Python formatter
 - **Ruff** - Python linter
 - **gofmt** - Go formatter

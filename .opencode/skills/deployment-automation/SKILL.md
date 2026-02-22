@@ -117,6 +117,13 @@ CMD ["node", "dist/index.js"]
 
 ### Platform-Specific
 
+#### Laravel-Specific Deployment
+- **Laravel Forge** — Server provisioning and deployment for PHP (Nginx, MySQL, Redis, SSL)
+- **Laravel Vapor** — Serverless deployment on AWS Lambda (auto-scaling, zero maintenance)
+- **Laravel Envoyer** — Zero-downtime deployment with rollback
+- **Laravel Cloud** — Managed Laravel hosting (PaaS)
+- Traditional: Nginx + PHP-FPM + Supervisor (queues) + Redis + MySQL/PostgreSQL
+
 #### AWS
 - ECS (Elastic Container Service)
 - EKS (Elastic Kubernetes Service)
