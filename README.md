@@ -1,7 +1,7 @@
 # cortex-agents
 
 <p align="center">
-  <strong>Model-agnostic agents for OpenCode with interactive model configuration, worktree workflow, and plan persistence</strong>
+  <strong>Model-agnostic agents for OpenCode with agent handover notifications, mermaid documentation, worktree workflow, and plan persistence</strong>
 </p>
 
 <p align="center">
@@ -24,7 +24,8 @@
   <a href="#model-configuration">Model Configuration</a> •
   <a href="#features">Features</a> •
   <a href="#agents">Agents</a> •
-  <a href="#tools">Tools</a>
+  <a href="#tools">Tools</a> •
+  <a href="#documentation-system">Documentation</a>
 </p>
 
 ---
@@ -118,6 +119,8 @@ npx cortex-agents configure --reset
 
 - 🤖 **Model-Agnostic** — Works with any provider: Anthropic, OpenAI, Google, xAI, DeepSeek, Kimi, and more
 - 🔧 **Interactive Configuration** — `npx cortex-agents configure` to select models with arrow-key menus
+- 🔔 **Agent Handover Notifications** — Toast notifications when agents switch, so you always know which mode you're in
+- 📄 **Mermaid Documentation System** — Auto-prompted docs with architecture diagrams for decisions, features, and flows
 - 🌳 **Worktree Workflow** — Create isolated development environments with git worktrees
 - 📋 **Plan Persistence** — Save implementation plans with mermaid diagrams to `.cortex/plans/`
 - 📝 **Session Management** — Record key decisions and context in `.cortex/sessions/`
@@ -232,6 +235,126 @@ All tools are bundled with the plugin and available automatically.
 - `session_list [limit]` - List recent sessions
 - `session_load <filename>` - Load a session summary
 
+### Documentation
+- `docs_init [path]` - Initialize `docs/` directory with decisions, features, and flows folders
+- `docs_save <title> <type> <content>` - Save a documentation file with mermaid diagrams
+- `docs_list [type]` - List documentation files (filter by decision, feature, flow, or all)
+- `docs_index` - Rebuild `docs/INDEX.md` with links to all docs (auto-called by `docs_save`)
+
+---
+
+## Agent Handover Notifications
+
+When agents switch (Plan → Build, Build → Debug, etc.), a **toast notification** appears automatically in the OpenCode TUI:
+
+```
+┌──────────────────────────────────┐
+│  Agent: build                    │
+│  Development mode — ready to     │
+│  implement                       │
+└──────────────────────────────────┘
+```
+
+This is fully automatic — no configuration needed. The plugin listens for agent switch events and displays the new agent's name and role context. Notifications last 4 seconds and cover all 7 agents (build, plan, debug, fullstack, testing, security, devops).
+
+---
+
+## Documentation System
+
+After completing any task, primary agents (build, debug) prompt:
+
+> **"Would you like to update project documentation?"**
+
+You can create three types of documents, each with a **mandatory mermaid diagram**:
+
+| Type | Template | Diagram Style | Use Case |
+|------|----------|---------------|----------|
+| **Decision** | ADR format (Context → Decision → Rationale → Consequences) | Graph (options comparison) | Architecture/technology choices |
+| **Feature** | Overview → Architecture → Components → Usage | Component diagram | New feature documentation |
+| **Flow** | Overview → Flow Diagram → Steps | Sequence diagram | Process/data flow documentation |
+
+### Setup
+
+Documentation is initialized automatically when you first save a doc. You can also set it up manually:
+
+```
+docs_init
+```
+
+This creates:
+
+```
+docs/
+├── INDEX.md            # Auto-generated index (rebuilt on every save)
+├── decisions/          # Architecture Decision Records
+├── features/           # Feature docs with component diagrams
+└── flows/              # Process/data flow docs with sequence diagrams
+```
+
+### Example: Decision Document
+
+```markdown
+---
+title: "Use OAuth2 for Authentication"
+type: decision
+date: 2026-02-22T10:30:00.000Z
+status: accepted
+tags: ["auth", "security"]
+related_files: ["src/auth.ts", "src/middleware/jwt.ts"]
+---
+
+# Decision: Use OAuth2 for Authentication
+
+## Context
+The application needs user authentication with third-party provider support.
+
+## Decision
+Use OAuth2 with JWT tokens for stateless authentication.
+
+## Rationale
+
+​```mermaid
+graph TD
+    A[OAuth2 + JWT] -->|Stateless, scalable| B[Selected ✓]
+    C[Session-based auth] -->|Server state required| D[Rejected]
+    E[API keys only] -->|No user identity| F[Rejected]
+​```
+
+OAuth2 provides industry-standard authorization with broad provider support.
+
+## Consequences
+- All API endpoints require JWT validation middleware
+- Token refresh logic needed on the frontend
+```
+
+### Auto-Generated Index
+
+Every time you save a document, `docs/INDEX.md` is automatically rebuilt with a table of all docs grouped by type:
+
+```markdown
+# Project Documentation
+
+> Auto-generated by cortex-agents. Last updated: 2026-02-22
+
+## 📋 Decisions (2)
+
+| Date | Title | Status | Tags |
+|------|-------|--------|------|
+| 2026-02-22 | [Use OAuth2](decisions/2026-02-22-use-oauth2.md) | accepted | auth, security |
+
+## 🚀 Features (1)
+
+| Date | Title | Status | Tags |
+|------|-------|--------|------|
+| 2026-02-22 | [User Auth](features/2026-02-22-user-auth.md) | implemented | auth |
+
+## 🔄 Flows (1)
+
+| Date | Title | Tags |
+|------|-------|------|
+| 2026-02-22 | [Login Flow](flows/2026-02-22-login-flow.md) | auth |
+```
+
 ---
 
 ## Skills
@@ -264,13 +387,15 @@ Plan Agent:
 
 User: "Yes"
 
-Build Agent:
+Build Agent:                          🔔 Toast: "Agent: build — Development mode"
 ├── Loads plan from .cortex/plans/
 ├── Checks git status (detects protected branch)
 ├── Asks: "Create branch or worktree?"
 ├── Creates feature/user-authentication
 ├── Implements following the plan
-└── Saves session summary with key decisions
+├── Saves session summary with key decisions
+├── Asks: "Update project documentation?"
+└── Saves feature doc with mermaid architecture diagram
 ```
 
 ---
@@ -301,13 +426,18 @@ Build Agent:
 
 ```
 <project-root>/
-└── .cortex/
-    ├── config.json         # Project configuration
-    ├── .gitignore          # Ignores sessions/, keeps plans/
-    ├── plans/              # Implementation plans (git tracked)
-    │   └── YYYY-MM-DD-type-slug.md
-    └── sessions/           # Session summaries (gitignored)
-        └── YYYY-MM-DD-session-id.md
+├── .cortex/
+│   ├── config.json         # Project configuration
+│   ├── .gitignore          # Ignores sessions/, keeps plans/
+│   ├── plans/              # Implementation plans (git tracked)
+│   │   └── YYYY-MM-DD-type-slug.md
+│   └── sessions/           # Session summaries (gitignored)
+│       └── YYYY-MM-DD-session-id.md
+└── docs/                   # Project documentation (git tracked)
+    ├── INDEX.md            # Auto-generated index
+    ├── decisions/          # Architecture Decision Records
+    ├── features/           # Feature docs with diagrams
+    └── flows/              # Process/data flow docs
 ```
 
 ---

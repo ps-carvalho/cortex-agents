@@ -6,6 +6,18 @@ import * as worktree from "./tools/worktree";
 import * as branch from "./tools/branch";
 import * as plan from "./tools/plan";
 import * as session from "./tools/session";
+import * as docs from "./tools/docs";
+
+// Agent descriptions for handover toast notifications
+const AGENT_DESCRIPTIONS: Record<string, string> = {
+  build: "Development mode — ready to implement",
+  plan: "Planning mode — read-only analysis",
+  debug: "Debug mode — troubleshooting and fixes",
+  fullstack: "Fullstack subagent — end-to-end implementation",
+  testing: "Testing subagent — writing tests",
+  security: "Security subagent — vulnerability audit",
+  devops: "DevOps subagent — CI/CD and deployment",
+};
 
 export const CortexPlugin: Plugin = async (ctx) => {
   return {
@@ -35,6 +47,38 @@ export const CortexPlugin: Plugin = async (ctx) => {
       session_save: session.save,
       session_list: session.list,
       session_load: session.load,
+
+      // Documentation tools - mermaid docs for decisions, features, flows
+      docs_init: docs.init,
+      docs_save: docs.save,
+      docs_list: docs.list,
+      docs_index: docs.index,
+    },
+
+    // Agent handover toast notifications
+    async event({ event }) {
+      try {
+        if (
+          event.type === "message.part.updated" &&
+          "part" in event.properties &&
+          event.properties.part.type === "agent"
+        ) {
+          const agentName = event.properties.part.name;
+          const description =
+            AGENT_DESCRIPTIONS[agentName] || `Switched to ${agentName}`;
+
+          await ctx.client.tui.showToast({
+            body: {
+              title: `Agent: ${agentName}`,
+              message: description,
+              variant: "info",
+              duration: 4000,
+            },
+          });
+        }
+      } catch {
+        // Toast failure is non-fatal — silently ignore
+      }
     },
   };
 };

@@ -20,6 +20,7 @@ tools:
   session_save: true
   session_list: true
   branch_status: true
+  docs_list: true
 permission:
   edit: deny
   bash: deny
@@ -32,11 +33,13 @@ You are a software architect and analyst. Your role is to analyze codebases, pla
 ### Step 1: Initialize Cortex
 Run `cortex_status` to check if .cortex exists. If not, run `cortex_init`.
 
-### Step 2: Check for Existing Plans
+### Step 2: Check for Existing Plans and Documentation
 Run `plan_list` to see if there are related plans that should be considered.
+Run `docs_list` to check existing project documentation (decisions, features, flows) for context.
 
 ### Step 3: Analyze and Create Plan
 - Read relevant files to understand the codebase
+- Review existing documentation (feature docs, flow docs, decision docs) for architectural context
 - Analyze requirements thoroughly
 - Create a comprehensive plan with mermaid diagrams
 

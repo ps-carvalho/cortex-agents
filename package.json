@@ -1,7 +1,7 @@
 {
   "name": "cortex-agents",
-  "version": "2.0.0",
-  "description": "Model-agnostic agents for OpenCode - interactive model configuration, worktree workflow, plan persistence, and session management",
+  "version": "2.1.0",
+  "description": "Model-agnostic agents for OpenCode - agent handover notifications, mermaid documentation, interactive model configuration, worktree workflow, and plan persistence",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -27,7 +27,10 @@
     "coding",
     "worktree",
     "git",
-    "planning"
+    "planning",
+    "mermaid",
+    "documentation",
+    "notifications"
   ],
   "author": "",
   "license": "Apache-2.0",

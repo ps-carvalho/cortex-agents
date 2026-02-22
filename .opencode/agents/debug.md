@@ -19,6 +19,10 @@ tools:
   branch_switch: true
   session_save: true
   session_list: true
+  docs_init: true
+  docs_save: true
+  docs_list: true
+  docs_index: true
 permission:
   edit: allow
   bash: allow
@@ -70,6 +74,22 @@ Use `session_save` to document:
 - Fix implemented
 - Key decisions made
 
+### Step 7: Documentation Prompt (MANDATORY)
+
+After fixing a bug and BEFORE committing, use the question tool to ask:
+
+"Would you like to document this fix?"
+
+Options:
+1. **Create decision doc** - Record why this fix approach was chosen (with rationale diagram)
+2. **Create flow doc** - Document the corrected flow with sequence diagram
+3. **Skip documentation** - Proceed to commit without docs
+
+If the user selects a doc type:
+1. Check if `docs/` exists. If not, run `docs_init`.
+2. Generate the document with a mermaid diagram following the strict template.
+3. Use `docs_save` to persist it.
+
 ---
 
 ## Core Principles
@@ -119,6 +139,9 @@ Use `session_save` to document:
 - `worktree_create` - Create hotfix worktree for critical issues
 - `worktree_open` - Get command to open new terminal
 - `session_save` - Document the debugging session
+- `docs_init` - Initialize docs/ folder structure
+- `docs_save` - Save documentation with mermaid diagrams
+- `docs_list` - Browse existing project documentation
 - Use `grep` and `glob` to search for related code
 - Check logs and error tracking systems
 - Review git history for recent changes

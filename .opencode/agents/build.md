@@ -21,6 +21,10 @@ tools:
   plan_load: true
   session_save: true
   session_list: true
+  docs_init: true
+  docs_save: true
+  docs_list: true
+  docs_index: true
 permission:
   edit: allow
   bash:
@@ -77,6 +81,29 @@ After completing work, use `session_save` to record:
 - What was accomplished
 - Key decisions made
 - Files changed (optional)
+
+### Step 8: Documentation Prompt (MANDATORY)
+
+After completing work and BEFORE committing, use the question tool to ask:
+
+"Would you like to update project documentation?"
+
+Options:
+1. **Create decision doc** - Record an architecture/technology decision (ADR) with rationale diagram
+2. **Create feature doc** - Document a new feature with architecture diagram
+3. **Create flow doc** - Document a process/data flow with sequence diagram
+4. **Skip documentation** - Proceed to commit without docs
+5. **Multiple docs** - Create more than one document type
+
+If the user selects a doc type:
+1. Check if `docs/` exists. If not, run `docs_init` and ask user to confirm the folder.
+2. Generate the appropriate document following the strict template for that type.
+   - **Decision docs** MUST include: Context, Decision, Rationale (with mermaid graph), Consequences
+   - **Feature docs** MUST include: Overview, Architecture (with mermaid graph), Key Components, Usage
+   - **Flow docs** MUST include: Overview, Flow Diagram (with mermaid sequenceDiagram), Steps
+3. Use `docs_save` to persist it. The index will auto-update.
+
+If the user selects "Multiple docs", repeat the generation for each selected type.
 
 ---
 
@@ -138,6 +165,7 @@ After completing work, use `session_save` to record:
 4. Write clean, tested code
 5. Verify with linters and type checkers
 6. Save session summary with key decisions
+7. Prompt for documentation before committing
 
 ## Testing
 - Write unit tests for business logic
@@ -153,6 +181,10 @@ After completing work, use `session_save` to record:
 - `worktree_open` - Get command to open terminal in worktree
 - `plan_load` - Load implementation plan if available
 - `session_save` - Record session summary after completing work
+- `docs_init` - Initialize docs/ folder structure
+- `docs_save` - Save documentation with mermaid diagrams
+- `docs_list` - Browse existing project documentation
+- `docs_index` - Rebuild documentation index
 - `skill` - Load relevant skills for complex tasks
 - `@testing` subagent - For comprehensive test writing
 - `@security` subagent - For security reviews
