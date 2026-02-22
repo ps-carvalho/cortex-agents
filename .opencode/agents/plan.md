@@ -56,10 +56,12 @@ Use `plan_save` with:
 "Plan saved to .cortex/plans/. How would you like to proceed?"
 
 Options:
-1. **Switch to Build agent** - Hand off for implementation
-2. **Switch to Debug agent** - Hand off for investigation/fixing
-3. **Stay in Plan mode** - Continue planning or refine the plan
-4. **End session** - Stop here, plan is saved for later
+1. **Switch to Build agent** - Hand off for implementation in this session
+2. **Launch worktree in new terminal** - Create a worktree and open a new terminal tab with the plan auto-loaded
+3. **Launch worktree in background** - Create a worktree and let the AI implement headlessly while you continue
+4. **Switch to Debug agent** - Hand off for investigation/fixing
+5. **Stay in Plan mode** - Continue planning or refine the plan
+6. **End session** - Stop here, plan is saved for later
 
 ### Step 6: Provide Handoff Context
 If user chooses to switch agents, provide:
@@ -67,6 +69,11 @@ If user chooses to switch agents, provide:
 - Key tasks to implement first
 - Critical decisions to follow
 - Suggested branch name (e.g., feature/user-auth)
+
+If user chooses a worktree launch option:
+- Inform them the plan will be automatically propagated into the worktree's `.cortex/plans/`
+- Suggest the worktree name based on the plan (e.g., plan title slug)
+- Note that the Build agent in the new session will auto-load the plan
 
 ---
 

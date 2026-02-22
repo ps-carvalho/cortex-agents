@@ -7,6 +7,7 @@ import * as branch from "./tools/branch";
 import * as plan from "./tools/plan";
 import * as session from "./tools/session";
 import * as docs from "./tools/docs";
+import * as task from "./tools/task";
 
 // Agent descriptions for handover toast notifications
 const AGENT_DESCRIPTIONS: Record<string, string> = {
@@ -31,6 +32,8 @@ export const CortexPlugin: Plugin = async (ctx) => {
       worktree_list: worktree.list,
       worktree_remove: worktree.remove,
       worktree_open: worktree.open,
+      // Dynamic tool: needs client + shell via factory (closure injection)
+      worktree_launch: worktree.createLaunch(ctx.client, ctx.$),
 
       // Branch tools - git branch operations
       branch_create: branch.create,
@@ -53,6 +56,9 @@ export const CortexPlugin: Plugin = async (ctx) => {
       docs_save: docs.save,
       docs_list: docs.list,
       docs_index: docs.index,
+
+      // Task tools - finalize workflow (commit, push, PR)
+      task_finalize: task.finalize,
     },
 
     // Agent handover toast notifications

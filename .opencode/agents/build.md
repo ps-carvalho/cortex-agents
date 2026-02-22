@@ -14,6 +14,7 @@ tools:
   worktree_list: true
   worktree_remove: true
   worktree_open: true
+  worktree_launch: true
   branch_create: true
   branch_status: true
   branch_switch: true
@@ -25,6 +26,7 @@ tools:
   docs_save: true
   docs_list: true
   docs_index: true
+  task_finalize: true
 permission:
   edit: allow
   bash:
@@ -64,27 +66,35 @@ If a plan exists, load it with `plan_load`.
 Options:
 1. **Create a new branch** - Stay in this repo, create feature/bugfix branch
 2. **Create a worktree** - Isolated copy in ../.worktrees/ for parallel development
-3. **Create worktree + open new terminal** - Work in parallel session
-4. **Continue here** - Only if you're certain (not recommended on protected branches)
+3. **Continue here** - Only if you're certain (not recommended on protected branches)
+
+### Step 4b: Worktree Launch Mode (only if worktree chosen)
+**If the user chose "Create a worktree"**, use the question tool to ask:
+
+"How would you like to work in the worktree?"
+
+Options:
+1. **Stay in this session** - Create worktree, continue working here
+2. **Open in new terminal tab** - Full independent OpenCode session in a new terminal
+3. **Open in-app PTY** - Embedded terminal within this OpenCode session
+4. **Run in background** - AI implements headlessly while you keep working here
 
 ### Step 5: Execute Based on Response
 - **Branch**: Use `branch_create` with appropriate type (feature/bugfix/refactor)
-- **Worktree**: Use `worktree_create`, continue in current session
-- **Worktree + Terminal**: Use `worktree_create`, then `worktree_open` to provide command
+- **Worktree → Stay**: Use `worktree_create`, continue in current session
+- **Worktree → Terminal**: Use `worktree_create`, then `worktree_launch` with mode `terminal`
+- **Worktree → PTY**: Use `worktree_create`, then `worktree_launch` with mode `pty`
+- **Worktree → Background**: Use `worktree_create`, then `worktree_launch` with mode `background`
 - **Continue**: Proceed with caution, warn user about risks
+
+**For all worktree_launch modes**: If a plan was loaded in Step 3, pass its filename via the `plan` parameter so it gets propagated into the worktree's `.cortex/plans/` directory.
 
 ### Step 6: Proceed with Implementation
 Now implement the changes following the coding standards below.
 
-### Step 7: Save Session Summary
-After completing work, use `session_save` to record:
-- What was accomplished
-- Key decisions made
-- Files changed (optional)
+### Step 7: Documentation Prompt (MANDATORY)
 
-### Step 8: Documentation Prompt (MANDATORY)
-
-After completing work and BEFORE committing, use the question tool to ask:
+After completing work and BEFORE finalizing, use the question tool to ask:
 
 "Would you like to update project documentation?"
 
@@ -92,7 +102,7 @@ Options:
 1. **Create decision doc** - Record an architecture/technology decision (ADR) with rationale diagram
 2. **Create feature doc** - Document a new feature with architecture diagram
 3. **Create flow doc** - Document a process/data flow with sequence diagram
-4. **Skip documentation** - Proceed to commit without docs
+4. **Skip documentation** - Proceed without docs
 5. **Multiple docs** - Create more than one document type
 
 If the user selects a doc type:
@@ -104,6 +114,48 @@ If the user selects a doc type:
 3. Use `docs_save` to persist it. The index will auto-update.
 
 If the user selects "Multiple docs", repeat the generation for each selected type.
+
+### Step 8: Save Session Summary
+Use `session_save` to record:
+- What was accomplished
+- Key decisions made
+- Files changed (optional)
+
+### Step 9: Finalize Task (MANDATORY)
+
+After implementation, docs, and session summary are done, use the question tool to ask:
+
+"Ready to finalize? This will commit, push, and create a PR."
+
+Options:
+1. **Finalize now** - Commit all changes, push, and create PR
+2. **Finalize as draft PR** - Same as above but PR is marked as draft
+3. **Skip finalize** - Don't commit or create PR yet
+
+If the user selects finalize:
+1. Use `task_finalize` with:
+   - `commitMessage` in conventional format (e.g., `feat: add worktree launch workflow`)
+   - `planFilename` if a plan was loaded in Step 3 (auto-populates PR body)
+   - `draft: true` if draft PR was selected
+2. The tool automatically:
+   - Stages all changes (`git add -A`)
+   - Commits with the provided message
+   - Pushes to `origin`
+   - Creates a PR (auto-targets `main` if in a worktree)
+   - Populates PR body from `.cortex/plans/` if a plan exists
+3. Report the PR URL to the user
+
+### Step 10: Worktree Cleanup (only if in worktree)
+
+If `task_finalize` reports this is a worktree, use the question tool to ask:
+
+"PR created! Would you like to clean up the worktree?"
+
+Options:
+1. **Yes, remove worktree** - Remove the worktree (keeps branch for PR)
+2. **No, keep it** - Leave worktree for future work or PR revisions
+
+If yes, use `worktree_remove` with the worktree name. Do NOT delete the branch (it's needed for the PR).
 
 ---
 
@@ -164,8 +216,9 @@ If the user selects "Multiple docs", repeat the generation for each selected typ
 3. Load relevant plan if available
 4. Write clean, tested code
 5. Verify with linters and type checkers
-6. Save session summary with key decisions
-7. Prompt for documentation before committing
+6. Create documentation (docs_save) when prompted
+7. Save session summary with key decisions
+8. Finalize: commit, push, and create PR (task_finalize)
 
 ## Testing
 - Write unit tests for business logic
@@ -178,9 +231,11 @@ If the user selects "Multiple docs", repeat the generation for each selected typ
 - `branch_status` - ALWAYS check before making changes
 - `branch_create` - Create feature/bugfix branch
 - `worktree_create` - Create isolated worktree for parallel work
-- `worktree_open` - Get command to open terminal in worktree
+- `worktree_launch` - Launch OpenCode in a worktree (terminal tab, PTY, or background). Auto-propagates plans.
+- `worktree_open` - Get manual command to open terminal in worktree (legacy fallback)
 - `plan_load` - Load implementation plan if available
 - `session_save` - Record session summary after completing work
+- `task_finalize` - Finalize task: stage, commit, push, create PR. Auto-detects worktrees, auto-populates PR body from plans.
 - `docs_init` - Initialize docs/ folder structure
 - `docs_save` - Save documentation with mermaid diagrams
 - `docs_list` - Browse existing project documentation

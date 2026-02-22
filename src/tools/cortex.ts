@@ -6,7 +6,7 @@ const CORTEX_DIR = ".cortex";
 const DEFAULT_CONFIG = {
   version: "1.0.0",
   worktree: {
-    root: "../.worktrees",
+    root: ".worktrees",
     autoCleanup: false,
   },
   branches: {

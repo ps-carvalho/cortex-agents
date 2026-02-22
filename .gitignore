@@ -12,6 +12,9 @@ Thumbs.db
 *.swp
 *.swo
 
+# Worktrees
+.worktrees/
+
 # Environment
 .env
 .env.local

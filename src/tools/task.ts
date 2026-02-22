@@ -1,0 +1,340 @@
+import { tool } from "@opencode-ai/plugin";
+import * as fs from "fs";
+import * as path from "path";
+import { detectWorktreeInfo } from "../utils/worktree-detect.js";
+import {
+  findPlanContent,
+  extractPlanSections,
+  buildPrBodyFromPlan,
+} from "../utils/plan-extract.js";
+
+const PROTECTED_BRANCHES = ["main", "master", "develop", "production", "staging"];
+const DOCS_DIR = "docs";
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+/**
+ * Check if `gh` CLI is installed and authenticated.
+ */
+async function checkGhCli(cwd: string): Promise<{ ok: boolean; error?: string }> {
+  // Check if gh exists
+  try {
+    await Bun.$`which gh`.quiet().text();
+  } catch {
+    return {
+      ok: false,
+      error:
+        "GitHub CLI (gh) is not installed. Install it from https://cli.github.com/ and run `gh auth login`.",
+    };
+  }
+
+  // Check if authenticated
+  try {
+    await Bun.$`gh auth status`.cwd(cwd).quiet().text();
+  } catch {
+    return {
+      ok: false,
+      error:
+        "GitHub CLI is not authenticated. Run `gh auth login` to authenticate.",
+    };
+  }
+
+  return { ok: true };
+}
+
+/**
+ * Check if a remote named "origin" is configured.
+ */
+async function checkRemote(cwd: string): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const remotes = await Bun.$`git -C ${cwd} remote -v`.quiet().text();
+    if (!remotes.includes("origin")) {
+      return {
+        ok: false,
+        error:
+          "No 'origin' remote configured. Add one with: git remote add origin <url>",
+      };
+    }
+    return { ok: true };
+  } catch {
+    return { ok: false, error: "Could not check git remotes." };
+  }
+}
+
+/**
+ * Check whether docs/ has any content beyond .gitkeep files.
+ */
+function checkDocsExist(worktree: string): { exists: boolean; count: number } {
+  const docsRoot = path.join(worktree, DOCS_DIR);
+  if (!fs.existsSync(docsRoot)) {
+    return { exists: false, count: 0 };
+  }
+
+  let count = 0;
+  const subDirs = ["decisions", "features", "flows"];
+  for (const sub of subDirs) {
+    const subPath = path.join(docsRoot, sub);
+    if (fs.existsSync(subPath)) {
+      const files = fs.readdirSync(subPath).filter((f) => f.endsWith(".md") && f !== ".gitkeep");
+      count += files.length;
+    }
+  }
+
+  return { exists: count > 0, count };
+}
+
+/**
+ * Get a summary of commits that will be in the PR (commits ahead of base).
+ */
+async function getCommitLog(cwd: string, baseBranch: string): Promise<string> {
+  try {
+    const log = await Bun.$`git -C ${cwd} log ${baseBranch}..HEAD --oneline`.quiet().text();
+    return log.trim();
+  } catch {
+    // If base branch doesn't exist locally, try origin/<base>
+    try {
+      const log = await Bun.$`git -C ${cwd} log origin/${baseBranch}..HEAD --oneline`.quiet().text();
+      return log.trim();
+    } catch {
+      return "";
+    }
+  }
+}
+
+// ─── Tool ────────────────────────────────────────────────────────────────────
+
+export const finalize = tool({
+  description:
+    "Finalize a completed task: stage all changes, commit, push to origin, and create a PR via GitHub CLI. " +
+    "Auto-detects worktrees and targets the main branch. " +
+    "Auto-populates the PR body from .cortex/plans/ if a plan exists. " +
+    "Run docs_list and session_save BEFORE calling this tool.",
+  args: {
+    commitMessage: tool.schema
+      .string()
+      .describe(
+        "Commit message in conventional format (e.g., 'feat: add worktree launch tool')",
+      ),
+    prTitle: tool.schema
+      .string()
+      .optional()
+      .describe("PR title (defaults to the commit message)"),
+    prBody: tool.schema
+      .string()
+      .optional()
+      .describe("Custom PR body in markdown. If omitted, auto-generated from .cortex/plans/ or commit log."),
+    baseBranch: tool.schema
+      .string()
+      .optional()
+      .describe("Target branch for PR (auto-detected: 'main' for worktrees, default branch otherwise)"),
+    planFilename: tool.schema
+      .string()
+      .optional()
+      .describe("Plan filename from .cortex/plans/ to include in PR body"),
+    draft: tool.schema
+      .boolean()
+      .optional()
+      .describe("Create as draft PR (default: false)"),
+  },
+  async execute(args, context) {
+    const {
+      commitMessage,
+      prTitle,
+      prBody: customPrBody,
+      baseBranch: customBaseBranch,
+      planFilename,
+      draft = false,
+    } = args;
+
+    const cwd = context.worktree;
+    const output: string[] = [];
+    const warnings: string[] = [];
+
+    // ── 1. Validate: git repo ─────────────────────────────────
+    try {
+      await Bun.$`git -C ${cwd} rev-parse --git-dir`.quiet().text();
+    } catch {
+      return "✗ Error: Not in a git repository.";
+    }
+
+    // ── 2. Detect worktree + branch ───────────────────────────
+    const wtInfo = await detectWorktreeInfo(cwd);
+    const branchName = wtInfo.currentBranch;
+
+    if (!branchName || branchName === "(unknown)") {
+      return "✗ Error: Could not determine current branch.";
+    }
+
+    if (PROTECTED_BRANCHES.includes(branchName)) {
+      return `✗ Error: Cannot finalize on protected branch '${branchName}'.
+Create a feature/bugfix branch first with branch_create or worktree_create.`;
+    }
+
+    // ── 3. Determine base branch ──────────────────────────────
+    let baseBranch = customBaseBranch || "";
+
+    if (!baseBranch) {
+      if (wtInfo.isWorktree) {
+        baseBranch = "main";
+      } else {
+        // Try to detect default branch from origin
+        try {
+          const defaultRef = await Bun.$`git -C ${cwd} symbolic-ref refs/remotes/origin/HEAD`.quiet().text();
+          baseBranch = defaultRef.trim().replace("refs/remotes/origin/", "");
+        } catch {
+          baseBranch = "main"; // Sensible default
+        }
+      }
+    }
+
+    output.push(`Branch: ${branchName} → ${baseBranch}`);
+    if (wtInfo.isWorktree) {
+      output.push(`Worktree detected (main tree: ${wtInfo.mainWorktreePath})`);
+    }
+
+    // ── 4. Check prerequisites ────────────────────────────────
+    const ghCheck = await checkGhCli(cwd);
+    if (!ghCheck.ok) {
+      return `✗ ${ghCheck.error}`;
+    }
+
+    const remoteCheck = await checkRemote(cwd);
+    if (!remoteCheck.ok) {
+      return `✗ ${remoteCheck.error}`;
+    }
+
+    // ── 5. Check docs (warning only) ─────────────────────────
+    const docsCheck = checkDocsExist(cwd);
+    if (!docsCheck.exists) {
+      warnings.push(
+        "No documentation found in docs/. Consider creating docs with docs_save before finalizing.",
+      );
+    } else {
+      output.push(`Documentation: ${docsCheck.count} doc(s) found`);
+    }
+
+    // ── 6. Stage all changes ──────────────────────────────────
+    try {
+      await Bun.$`git -C ${cwd} add -A`.quiet();
+    } catch (error: any) {
+      return `✗ Error staging changes: ${error.message || error}`;
+    }
+
+    // ── 7. Commit ─────────────────────────────────────────────
+    let commitHash = "";
+    let commitSkipped = false;
+
+    try {
+      // Check if there's anything to commit
+      const status = await Bun.$`git -C ${cwd} status --porcelain`.quiet().text();
+      if (!status.trim()) {
+        commitSkipped = true;
+        output.push("No new changes to commit (working tree clean)");
+      } else {
+        await Bun.$`git -C ${cwd} commit -m ${commitMessage}`.quiet();
+        const hash = await Bun.$`git -C ${cwd} rev-parse --short HEAD`.quiet().text();
+        commitHash = hash.trim();
+        output.push(`Committed: ${commitHash} — ${commitMessage}`);
+      }
+    } catch (error: any) {
+      return `✗ Error committing: ${error.message || error}`;
+    }
+
+    // ── 8. Push to origin ─────────────────────────────────────
+    try {
+      await Bun.$`git -C ${cwd} push -u origin ${branchName}`.quiet();
+      output.push(`Pushed to origin/${branchName}`);
+    } catch (error: any) {
+      return `✗ Error pushing to origin: ${error.message || error}
+
+All previous steps succeeded (changes committed). Try pushing manually:
+  git push -u origin ${branchName}`;
+    }
+
+    // ── 9. Build PR body ──────────────────────────────────────
+    let prBodyContent = customPrBody || "";
+
+    if (!prBodyContent) {
+      // Try to build from plan
+      const plan = findPlanContent(cwd, planFilename, branchName);
+      if (plan) {
+        const sections = extractPlanSections(plan.content, plan.filename);
+        prBodyContent = buildPrBodyFromPlan(sections);
+        output.push(`PR body generated from plan: ${plan.filename}`);
+      } else {
+        // Fall back to commit log
+        const commitLog = await getCommitLog(cwd, baseBranch);
+        if (commitLog) {
+          prBodyContent = `## Changes\n\n\`\`\`\n${commitLog}\n\`\`\``;
+        } else {
+          prBodyContent = `Implementation on branch \`${branchName}\``;
+        }
+      }
+    }
+
+    // ── 10. Create PR via gh ──────────────────────────────────
+    const finalPrTitle = prTitle || commitMessage;
+    let prUrl = "";
+
+    try {
+      // Check if PR already exists for this branch
+      const existingPr = await Bun.$`gh pr view ${branchName} --json url --jq .url`
+        .cwd(cwd).quiet().nothrow().text();
+
+      if (existingPr.trim()) {
+        prUrl = existingPr.trim();
+        output.push(`PR already exists: ${prUrl}`);
+      } else {
+        // Create new PR
+        const draftFlag = draft ? "--draft" : "";
+        // Use a heredoc-style approach via stdin to handle complex body content
+        const bodyFile = path.join(cwd, ".cortex", ".pr-body-tmp.md");
+        const cortexDir = path.join(cwd, ".cortex");
+        if (!fs.existsSync(cortexDir)) {
+          fs.mkdirSync(cortexDir, { recursive: true });
+        }
+        fs.writeFileSync(bodyFile, prBodyContent);
+
+        try {
+          const createArgs = [
+            "gh", "pr", "create",
+            "--base", baseBranch,
+            "--title", finalPrTitle,
+            "--body-file", bodyFile,
+          ];
+          if (draft) createArgs.push("--draft");
+
+          const result = await Bun.$`gh pr create --base ${baseBranch} --title ${finalPrTitle} --body-file ${bodyFile} ${draft ? "--draft" : ""}`.cwd(cwd).quiet().text();
+          prUrl = result.trim();
+          output.push(`PR created: ${prUrl}`);
+        } finally {
+          // Clean up temp file
+          if (fs.existsSync(bodyFile)) {
+            fs.unlinkSync(bodyFile);
+          }
+        }
+      }
+    } catch (error: any) {
+      // PR creation failed but everything else succeeded
+      output.push(`⚠ PR creation failed: ${error.message || error}`);
+      output.push("");
+      output.push("Changes are committed and pushed. Create the PR manually:");
+      output.push(`  gh pr create --base ${baseBranch} --title "${finalPrTitle}"`);
+    }
+
+    // ── Build final output ────────────────────────────────────
+    let finalOutput = `✓ Task finalized\n\n`;
+    finalOutput += output.join("\n");
+
+    if (warnings.length > 0) {
+      finalOutput += `\n\nWarnings:\n${warnings.map((w) => `  ⚠ ${w}`).join("\n")}`;
+    }
+
+    if (wtInfo.isWorktree) {
+      finalOutput += `\n\nThis is a worktree. When the PR is merged, you can clean up with:
+  worktree_remove (name: "${path.basename(cwd)}", deleteBranch: true)`;
+    }
+
+    return finalOutput;
+  },
+});
