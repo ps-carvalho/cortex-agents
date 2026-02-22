@@ -1,7 +1,7 @@
 {
   "name": "cortex-agents",
   "version": "2.1.0",
-  "description": "Model-agnostic agents for OpenCode - agent handover notifications, mermaid documentation, interactive model configuration, worktree workflow, and plan persistence",
+  "description": "Supercharge OpenCode with structured workflows, intelligent agents, and automated development practices",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -30,17 +30,20 @@
     "planning",
     "mermaid",
     "documentation",
-    "notifications"
+    "notifications",
+    "workflow",
+    "pull-request",
+    "developer-tools"
   ],
   "author": "",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/your-org/cortex-agents"
+    "url": "https://github.com/ps-carvalho/cortex-agents"
   },
-  "homepage": "https://github.com/your-org/cortex-agents#readme",
+  "homepage": "https://github.com/ps-carvalho/cortex-agents#readme",
   "bugs": {
-    "url": "https://github.com/your-org/cortex-agents/issues"
+    "url": "https://github.com/ps-carvalho/cortex-agents/issues"
   },
   "engines": {
     "node": ">=18.0.0"

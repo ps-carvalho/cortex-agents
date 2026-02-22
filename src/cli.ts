@@ -500,8 +500,8 @@ function status(): void {
 function help(): void {
   console.log(`${PLUGIN_NAME} v${VERSION}
 
-Cortex agents for OpenCode — agent handover notifications, mermaid documentation,
-worktree workflow, plan persistence, and session management.
+Supercharge OpenCode with structured workflows, intelligent agents,
+and automated development practices.
 
 USAGE:
   npx ${PLUGIN_NAME} <command> [options]
@@ -520,28 +520,34 @@ EXAMPLES:
   npx ${PLUGIN_NAME} configure --reset # Reset to default models
   npx ${PLUGIN_NAME} status            # Check status
 
-AGENT TIERS:
-  Primary agents (build, plan, debug):
+AGENTS:
+  Primary (build, plan, debug):
     Handle complex tasks — select your best model.
 
   Subagents (fullstack, testing, security, devops):
     Handle focused tasks — a fast/cheap model works great.
 
-INCLUDED TOOLS:
-  cortex_init, cortex_status    - .cortex directory management
-  worktree_create, worktree_list, worktree_remove, worktree_open
-  branch_create, branch_status, branch_switch
-  plan_save, plan_list, plan_load, plan_delete
-  session_save, session_list, session_load
-  docs_init, docs_save, docs_list, docs_index  - mermaid documentation
+TOOLS (22):
+  cortex_init, cortex_status      .cortex directory management
+  worktree_create, worktree_list  Git worktree management
+  worktree_remove, worktree_open
+  worktree_launch                 Launch worktree (terminal/PTY/background)
+  branch_create, branch_status    Git branch operations
+  branch_switch
+  plan_save, plan_list            Plan persistence
+  plan_load, plan_delete
+  session_save, session_list      Session management
+  session_load
+  docs_init, docs_save            Mermaid documentation
+  docs_list, docs_index
+  task_finalize                   Commit, push, and create PR
 
-FEATURES:
-  Agent handover notifications  - Toast alerts when agents switch
-  Mermaid documentation system  - Auto-prompted docs with diagrams
-
-INCLUDED SKILLS:
-  web-development, testing-strategies, security-hardening,
-  deployment-automation, code-quality, git-workflow
+SKILLS (14):
+  web-development, frontend-development, backend-development,
+  mobile-development, desktop-development, database-design,
+  api-design, architecture-patterns, design-patterns,
+  testing-strategies, security-hardening, deployment-automation,
+  performance-optimization, code-quality, git-workflow
 `);
 }
 
