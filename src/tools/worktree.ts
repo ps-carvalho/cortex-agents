@@ -3,6 +3,7 @@ import type { PluginInput } from "@opencode-ai/plugin";
 import * as fs from "fs";
 import * as path from "path";
 import { propagatePlan } from "../utils/propagate.js";
+import { exec, git, which, shellEscape, spawn as shellSpawn } from "../utils/shell.js";
 
 const WORKTREE_ROOT = ".worktrees";
 
@@ -29,10 +30,7 @@ export const create = tool({
 
     // Check if we're in a git repository
     try {
-      const gitCheck = await Bun.$`git rev-parse --git-dir`.cwd(context.worktree).text();
-      if (!gitCheck.trim()) {
-        return "✗ Error: Not in a git repository";
-      }
+      await git(context.worktree, "rev-parse", "--git-dir");
     } catch {
       return "✗ Error: Not in a git repository. Initialize git first.";
     }
@@ -52,11 +50,11 @@ Use worktree_list to see existing worktrees.`;
 
     // Create the worktree with a new branch
     try {
-      await Bun.$`git worktree add -b ${branchName} ${absoluteWorktreePath}`.cwd(context.worktree);
-    } catch (error: any) {
+      await git(context.worktree, "worktree", "add", "-b", branchName, absoluteWorktreePath);
+    } catch {
       // Branch might already exist, try without -b
       try {
-        await Bun.$`git worktree add ${absoluteWorktreePath} ${branchName}`.cwd(context.worktree);
+        await git(context.worktree, "worktree", "add", absoluteWorktreePath, branchName);
       } catch (error2: any) {
         return `✗ Error creating worktree: ${error2.message || error2}`;
       }
@@ -79,13 +77,13 @@ export const list = tool({
   args: {},
   async execute(args, context) {
     try {
-      const result = await Bun.$`git worktree list`.cwd(context.worktree).text();
-      
-      if (!result.trim()) {
+      const { stdout } = await git(context.worktree, "worktree", "list");
+
+      if (!stdout.trim()) {
         return "No worktrees found.";
       }
 
-      const lines = result.trim().split("\n");
+      const lines = stdout.trim().split("\n");
       let output = "Git Worktrees:\n\n";
 
       for (const line of lines) {
@@ -93,10 +91,10 @@ export const list = tool({
         const worktreePath = parts[0];
         const commit = parts[1];
         const branch = parts[2]?.replace(/[\[\]]/g, "") || "detached";
-        
+
         const isMain = worktreePath === context.worktree;
         const marker = isMain ? " (main)" : "";
-        
+
         output += `• ${branch}${marker}\n`;
         output += `  Path: ${worktreePath}\n`;
         output += `  Commit: ${commit}\n\n`;
@@ -134,19 +132,19 @@ Use worktree_list to see existing worktrees.`;
     // Get branch name before removing
     let branchName = "";
     try {
-      branchName = await Bun.$`git -C ${absoluteWorktreePath} branch --show-current`.text();
-      branchName = branchName.trim();
+      const { stdout } = await git(absoluteWorktreePath, "branch", "--show-current");
+      branchName = stdout.trim();
     } catch {
       // Ignore error, branch detection is optional
     }
 
     // Remove the worktree
     try {
-      await Bun.$`git worktree remove ${absoluteWorktreePath}`.cwd(context.worktree);
-    } catch (error: any) {
+      await git(context.worktree, "worktree", "remove", absoluteWorktreePath);
+    } catch {
       // Try force remove if there are changes
       try {
-        await Bun.$`git worktree remove --force ${absoluteWorktreePath}`.cwd(context.worktree);
+        await git(context.worktree, "worktree", "remove", "--force", absoluteWorktreePath);
       } catch (error2: any) {
         return `✗ Error removing worktree: ${error2.message || error2}
 
@@ -159,7 +157,7 @@ The worktree may have uncommitted changes. Commit or stash them first.`;
     // Delete branch if requested
     if (deleteBranch && branchName) {
       try {
-        await Bun.$`git branch -d ${branchName}`.cwd(context.worktree);
+        await git(context.worktree, "branch", "-d", branchName);
         output += `\n✓ Deleted branch ${branchName}`;
       } catch (error: any) {
         output += `\n⚠ Could not delete branch ${branchName}: ${error.message || error}`;
@@ -274,14 +272,9 @@ async function findOpencodeBinary(): Promise<string | null> {
   const wellKnown = path.join(homeDir, ".opencode", "bin", "opencode");
   if (fs.existsSync(wellKnown)) return wellKnown;
 
-  // Try which/where
-  try {
-    const result = await Bun.$`which opencode`.quiet().text();
-    const bin = result.trim();
-    if (bin && fs.existsSync(bin)) return bin;
-  } catch {
-    // Not in PATH
-  }
+  // Try which
+  const bin = await which("opencode");
+  if (bin && fs.existsSync(bin)) return bin;
 
   return null;
 }
@@ -309,23 +302,27 @@ async function launchTerminalTab(
 ): Promise<string> {
   const platform = process.platform;
 
-  // Build the command to run inside the new terminal
+  // Build a safe display command for manual fallback
   const innerCmd = `cd "${worktreePath}" && "${opencodeBin}" --agent ${agent} --prompt "${prompt.replace(/"/g, '\\"')}"`;
 
   if (platform === "darwin") {
     const terminal = detectMacTerminal();
+
+    // For osascript, we must escape for AppleScript string context
+    const safePath = shellEscape(worktreePath);
+    const safeBin = shellEscape(opencodeBin);
 
     if (terminal === "iterm2") {
       const script = `tell application "iTerm2"
   tell current window
     create tab with default profile
     tell current session of current tab
-      write text "cd \\"${worktreePath}\\" && \\"${opencodeBin}\\" --agent ${agent}"
+      write text "cd \\"${safePath}\\" && \\"${safeBin}\\" --agent ${shellEscape(agent)}"
     end tell
   end tell
 end tell`;
       try {
-        await Bun.$`osascript -e ${script}`;
+        await exec("osascript", ["-e", script]);
         return `✓ Opened new iTerm2 tab in worktree`;
       } catch {
         // Fall back to generic open
@@ -333,19 +330,17 @@ end tell`;
     }
 
     if (terminal === "terminal" || terminal === "unknown") {
-      // Terminal.app: `do script` opens in a new window by default
-      // Using "do script in window 1" would reuse, so we use a plain `do script`
       const script = `tell application "Terminal"
   activate
-  do script "cd \\"${worktreePath}\\" && \\"${opencodeBin}\\" --agent ${agent}"
+  do script "cd \\"${safePath}\\" && \\"${safeBin}\\" --agent ${shellEscape(agent)}"
 end tell`;
       try {
-        await Bun.$`osascript -e ${script}`;
+        await exec("osascript", ["-e", script]);
         return `✓ Opened new Terminal.app window in worktree`;
-      } catch (err: any) {
+      } catch {
         // Last resort: use open -a
         try {
-          await Bun.$`open -a Terminal "${worktreePath}"`;
+          await exec("open", ["-a", "Terminal", worktreePath]);
           return `✓ Opened Terminal.app in worktree directory (run opencode manually)`;
         } catch {
           return `✗ Could not open terminal. Manual command:\n  ${innerCmd}`;
@@ -357,18 +352,21 @@ end tell`;
   if (platform === "linux") {
     const terminal = detectLinuxTerminal();
 
+    // Build a safe inner command for bash -c
+    const bashCmd = `cd "${shellEscape(worktreePath)}" && "${shellEscape(opencodeBin)}" --agent ${shellEscape(agent)}`;
+
     const launchers: Record<string, string[]> = {
-      "kitty": ["kitty", "--directory", worktreePath, "--", "bash", "-c", innerCmd],
-      "alacritty": ["alacritty", "--working-directory", worktreePath, "-e", "bash", "-c", innerCmd],
-      "wezterm": ["wezterm", "start", "--cwd", worktreePath, "--", "bash", "-c", innerCmd],
-      "gnome-terminal": ["gnome-terminal", "--working-directory", worktreePath, "--", "bash", "-c", innerCmd],
-      "konsole": ["konsole", "--workdir", worktreePath, "-e", "bash", "-c", innerCmd],
+      "kitty": ["kitty", "--directory", worktreePath, "--", "bash", "-c", bashCmd],
+      "alacritty": ["alacritty", "--working-directory", worktreePath, "-e", "bash", "-c", bashCmd],
+      "wezterm": ["wezterm", "start", "--cwd", worktreePath, "--", "bash", "-c", bashCmd],
+      "gnome-terminal": ["gnome-terminal", "--working-directory", worktreePath, "--", "bash", "-c", bashCmd],
+      "konsole": ["konsole", "--workdir", worktreePath, "-e", "bash", "-c", bashCmd],
     };
 
     const args = launchers[terminal];
     if (args) {
       try {
-        Bun.spawn(args, { cwd: worktreePath, stdout: "ignore", stderr: "ignore" });
+        shellSpawn(args[0], args.slice(1), { cwd: worktreePath });
         return `✓ Opened ${terminal} in worktree`;
       } catch {
         // Fall through to generic attempt
@@ -378,7 +376,7 @@ end tell`;
     // Generic fallback: try common terminals in order
     for (const [name, cmdArgs] of Object.entries(launchers)) {
       try {
-        Bun.spawn(cmdArgs, { cwd: worktreePath, stdout: "ignore", stderr: "ignore" });
+        shellSpawn(cmdArgs[0], cmdArgs.slice(1), { cwd: worktreePath });
         return `✓ Opened ${name} in worktree`;
       } catch {
         continue;
@@ -390,7 +388,8 @@ end tell`;
 
   if (platform === "win32") {
     try {
-      await Bun.$`start cmd /k "cd /d ${worktreePath} && ${opencodeBin} --agent ${agent}"`;
+      // Use cmd with array args — /k keeps the window open
+      await exec("cmd", ["/k", `cd /d "${shellEscape(worktreePath)}" && "${shellEscape(opencodeBin)}" --agent ${shellEscape(agent)}`]);
       return `✓ Opened new cmd window in worktree`;
     } catch {
       return `✗ Could not open terminal. Manual command:\n  ${innerCmd}`;
@@ -446,15 +445,14 @@ async function launchBackground(
   prompt: string,
 ): Promise<string> {
   // Spawn opencode run as a detached background process
-  const proc = Bun.spawn(
-    [opencodeBin, "run", "--agent", agent, prompt],
+  const proc = shellSpawn(
+    opencodeBin,
+    ["run", "--agent", agent, prompt],
     {
       cwd: worktreePath,
-      stdout: "pipe",
-      stderr: "pipe",
+      stdio: "pipe",
       env: {
         ...process.env,
-        // Ensure the background instance knows its directory
         HOME: process.env.HOME || "",
         PATH: process.env.PATH || "",
       },
@@ -515,14 +513,17 @@ To check worktree status later:
  * This runs asynchronously — does not block the tool response.
  */
 async function monitorBackgroundProcess(
-  proc: ReturnType<typeof Bun.spawn>,
+  proc: ReturnType<typeof shellSpawn>,
   client: Client,
   branchName: string,
   worktreePath: string,
 ): Promise<void> {
   try {
-    // Wait for the process to exit (non-blocking from the tool's perspective)
-    const exitCode = await proc.exited;
+    // Wait for the process to exit
+    const exitCode = await new Promise<number>((resolve) => {
+      proc.on("exit", (code) => resolve(code ?? 1));
+      proc.on("error", () => resolve(1));
+    });
 
     // Clean up PID file
     const pidFile = path.join(worktreePath, ".cortex", ".background-pid");
@@ -638,8 +639,8 @@ Install OpenCode or ensure it's in your PATH.`;
       // ── Detect branch name ─────────────────────────────────────
       let branchName = name;
       try {
-        const branch = await Bun.$`git -C ${absoluteWorktreePath} branch --show-current`.quiet().text();
-        if (branch.trim()) branchName = branch.trim();
+        const { stdout } = await git(absoluteWorktreePath, "branch", "--show-current");
+        if (stdout.trim()) branchName = stdout.trim();
       } catch {
         // Use worktree name as fallback
       }

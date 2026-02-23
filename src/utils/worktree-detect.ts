@@ -1,4 +1,5 @@
 import * as path from "path";
+import { git } from "./shell.js";
 
 /**
  * Information about the current worktree context.
@@ -28,16 +29,16 @@ export async function detectWorktreeInfo(cwd: string): Promise<WorktreeInfo> {
 
   // Get current branch
   try {
-    const branch = await Bun.$`git -C ${cwd} branch --show-current`.quiet().text();
-    result.currentBranch = branch.trim();
+    const { stdout } = await git(cwd, "branch", "--show-current");
+    result.currentBranch = stdout.trim();
   } catch {
     result.currentBranch = "(unknown)";
   }
 
   // Compare git-dir and git-common-dir
   try {
-    const gitDirRaw = await Bun.$`git -C ${cwd} rev-parse --git-dir`.quiet().text();
-    const commonDirRaw = await Bun.$`git -C ${cwd} rev-parse --git-common-dir`.quiet().text();
+    const { stdout: gitDirRaw } = await git(cwd, "rev-parse", "--git-dir");
+    const { stdout: commonDirRaw } = await git(cwd, "rev-parse", "--git-common-dir");
 
     // Resolve both to absolute paths for reliable comparison
     const absGitDir = path.resolve(cwd, gitDirRaw.trim());

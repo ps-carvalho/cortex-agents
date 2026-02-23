@@ -1,4 +1,5 @@
 import { tool } from "@opencode-ai/plugin";
+import { git } from "../utils/shell.js";
 
 const PROTECTED_BRANCHES = ["main", "master", "develop", "production", "staging"];
 
@@ -19,15 +20,15 @@ export const create = tool({
 
     // Check if we're in a git repository
     try {
-      await Bun.$`git rev-parse --git-dir`.cwd(context.worktree).text();
+      await git(context.worktree, "rev-parse", "--git-dir");
     } catch {
       return "✗ Error: Not in a git repository";
     }
 
     // Check if branch already exists
     try {
-      const branches = await Bun.$`git branch --list ${branchName}`.cwd(context.worktree).text();
-      if (branches.trim()) {
+      const { stdout } = await git(context.worktree, "branch", "--list", branchName);
+      if (stdout.trim()) {
         return `✗ Error: Branch '${branchName}' already exists.
 
 Use branch_switch to switch to it, or choose a different name.`;
@@ -38,7 +39,7 @@ Use branch_switch to switch to it, or choose a different name.`;
 
     // Create and checkout the branch
     try {
-      await Bun.$`git checkout -b ${branchName}`.cwd(context.worktree);
+      await git(context.worktree, "checkout", "-b", branchName);
     } catch (error: any) {
       return `✗ Error creating branch: ${error.message || error}`;
     }
@@ -57,7 +58,7 @@ export const status = tool({
   async execute(args, context) {
     // Check if we're in a git repository
     try {
-      await Bun.$`git rev-parse --git-dir`.cwd(context.worktree).text();
+      await git(context.worktree, "rev-parse", "--git-dir");
     } catch {
       return "✗ Not in a git repository";
     }
@@ -71,7 +72,8 @@ export const status = tool({
 
     // Get current branch
     try {
-      currentBranch = (await Bun.$`git branch --show-current`.cwd(context.worktree).text()).trim();
+      const { stdout } = await git(context.worktree, "branch", "--show-current");
+      currentBranch = stdout.trim();
       if (!currentBranch) {
         currentBranch = "(detached HEAD)";
       }
@@ -84,18 +86,18 @@ export const status = tool({
 
     // Check for changes
     try {
-      const statusOutput = await Bun.$`git status --porcelain`.cwd(context.worktree).text();
-      const lines = statusOutput.trim().split("\n").filter((l) => l);
-      
+      const { stdout } = await git(context.worktree, "status", "--porcelain");
+      const lines = stdout.trim().split("\n").filter((l) => l);
+
       for (const line of lines) {
-        const status = line.substring(0, 2);
-        if (status[0] !== " " && status[0] !== "?") {
+        const st = line.substring(0, 2);
+        if (st[0] !== " " && st[0] !== "?") {
           stagedChanges = true;
         }
-        if (status[1] !== " " && status[1] !== "?") {
+        if (st[1] !== " " && st[1] !== "?") {
           hasChanges = true;
         }
-        if (status === "??") {
+        if (st === "??") {
           untrackedFiles = true;
         }
       }
@@ -105,8 +107,8 @@ export const status = tool({
 
     // Check ahead/behind
     try {
-      const result = await Bun.$`git rev-list --left-right --count HEAD...@{upstream}`.cwd(context.worktree).text();
-      const [ahead, behind] = result.trim().split(/\s+/);
+      const { stdout } = await git(context.worktree, "rev-list", "--left-right", "--count", "HEAD...@{upstream}");
+      const [ahead, behind] = stdout.trim().split(/\s+/);
       if (parseInt(ahead) > 0 || parseInt(behind) > 0) {
         aheadBehind = `Ahead: ${ahead}, Behind: ${behind}`;
       }
@@ -159,10 +161,10 @@ export const switch_ = tool({
 
     // Check if branch exists
     try {
-      const branches = await Bun.$`git branch --list ${branch}`.cwd(context.worktree).text();
-      if (!branches.trim()) {
+      const { stdout } = await git(context.worktree, "branch", "--list", branch);
+      if (!stdout.trim()) {
         // Try remote branch
-        const remoteBranches = await Bun.$`git branch -r --list origin/${branch}`.cwd(context.worktree).text();
+        const { stdout: remoteBranches } = await git(context.worktree, "branch", "-r", "--list", `origin/${branch}`);
         if (!remoteBranches.trim()) {
           return `✗ Error: Branch '${branch}' not found locally or on origin.
 
@@ -175,7 +177,7 @@ Use branch_create to create a new branch.`;
 
     // Switch to branch
     try {
-      await Bun.$`git checkout ${branch}`.cwd(context.worktree);
+      await git(context.worktree, "checkout", branch);
     } catch (error: any) {
       return `✗ Error switching branch: ${error.message || error}
 
