@@ -43,7 +43,7 @@ npx cortex-agents configure     # Pick your models interactively
 # Restart OpenCode - done.
 ```
 
-That's it. Your OpenCode session now has 7 specialized agents, 22 tools, and 14 domain skills.
+That's it. Your OpenCode session now has 7 specialized agents, 23 tools, and 14 domain skills.
 
 <br>
 
@@ -77,6 +77,8 @@ Create isolated development environments and launch them instantly:
 | **Background** | AI implements headlessly while you keep working - toast notifications on completion |
 
 Plans are automatically propagated into the worktree's `.cortex/plans/` so the new session has full context.
+
+**Cross-platform terminal support** via the terminal driver system — automatically detects and integrates with tmux, iTerm2, Terminal.app, kitty, wezterm, Konsole, and GNOME Terminal. Tabs opened by the launcher are tracked and automatically closed when the worktree is removed.
 
 ### Task Finalizer
 
@@ -135,16 +137,16 @@ Subagents return **structured reports** with severity levels (`BLOCKING`, `CRITI
 
 ## Tools
 
-22 tools bundled and auto-registered. No configuration needed.
+23 tools bundled and auto-registered. No configuration needed.
 
 <table>
 <tr><td width="50%">
 
 **Git Workflow**
 - `branch_status` - Current branch + change detection
-- `branch_create` - Convention-named branches
+- `branch_create` - Convention-named branches (with toast notifications)
 - `branch_switch` - Safe branch switching
-- `worktree_create` - Isolated worktree in `.worktrees/`
+- `worktree_create` - Isolated worktree in `.worktrees/` (with toast notifications)
 - `worktree_launch` - Launch worktree (terminal/PTY/background)
 - `worktree_list` / `worktree_remove` / `worktree_open`
 
@@ -153,7 +155,7 @@ Subagents return **structured reports** with severity levels (`BLOCKING`, `CRITI
 **Planning & Sessions**
 - `plan_save` / `plan_load` / `plan_list` / `plan_delete`
 - `session_save` / `session_list` / `session_load`
-- `cortex_init` / `cortex_status`
+- `cortex_init` / `cortex_status` / `cortex_configure`
 
 </td></tr>
 <tr><td width="50%">
@@ -166,11 +168,12 @@ Subagents return **structured reports** with severity levels (`BLOCKING`, `CRITI
 
 </td><td width="50%">
 
-**Finalization**
+**Finalization & Config**
 - `task_finalize` - Stage, commit, push, create PR
   - Auto-detects worktree (targets main)
   - Auto-populates PR from `.cortex/plans/`
   - Warns if docs are missing
+- `cortex_configure` - Set models from within an agent session
 
 </td></tr>
 </table>
@@ -183,7 +186,6 @@ Subagents return **structured reports** with severity levels (`BLOCKING`, `CRITI
 
 | Skill | Covers |
 |-------|--------|
-| **web-development** | Full-stack patterns, REST/GraphQL, SSR, state management |
 | **frontend-development** | React, Vue, Svelte, CSS architecture, accessibility |
 | **backend-development** | API design, middleware, auth, caching, queue systems |
 | **mobile-development** | React Native, Flutter, native iOS/Android patterns |
@@ -203,10 +205,11 @@ Subagents return **structured reports** with severity levels (`BLOCKING`, `CRITI
 
 ## Model Configuration
 
-Cortex agents are **model-agnostic**. Pick any provider:
+Cortex agents are **model-agnostic**. Configure globally or per-project:
 
 ```bash
-npx cortex-agents configure
+npx cortex-agents configure            # Global (all projects)
+npx cortex-agents configure --project  # Per-project (saves to .opencode/models.json)
 ```
 
 ```
@@ -224,6 +227,19 @@ npx cortex-agents configure
   Gemini 2.5 Flash   (google)        Fast and efficient
   Same as primary
 ```
+
+### In-Agent Configuration
+
+Agents can also configure models during a session via the `cortex_configure` tool — no need to leave OpenCode. The agent will prompt you to select models when `.cortex/` is first initialized.
+
+### Per-Project vs Global
+
+| Scope | Where | Use Case |
+|-------|-------|----------|
+| **Global** | `~/.config/opencode/opencode.json` | Default for all projects |
+| **Per-project** | `.opencode/models.json` + `opencode.json` | Different models for different repos |
+
+Per-project config takes priority. Team members get the same model settings when they clone the repo (`.opencode/models.json` is git-tracked).
 
 ### Supported Providers
 
@@ -248,6 +264,8 @@ your-project/
      config.json              Configuration
      plans/                   Implementation plans (git tracked)
      sessions/                Session summaries (gitignored)
+  .opencode/
+     models.json              Per-project model config (git tracked)
   .worktrees/                  Git worktrees (gitignored)
      feature-auth/            Isolated development copy
      bugfix-login/
@@ -263,11 +281,13 @@ your-project/
 ## CLI Reference
 
 ```bash
-npx cortex-agents install              # Install plugin, agents, and skills
-npx cortex-agents configure            # Interactive model selection
-npx cortex-agents configure --reset    # Reset to OpenCode defaults
-npx cortex-agents uninstall            # Clean removal of everything
-npx cortex-agents status               # Show installation status
+npx cortex-agents install                      # Install plugin, agents, and skills
+npx cortex-agents configure                    # Global model selection
+npx cortex-agents configure --project          # Per-project model selection
+npx cortex-agents configure --reset            # Reset global models
+npx cortex-agents configure --project --reset  # Reset per-project models
+npx cortex-agents uninstall                    # Clean removal of everything
+npx cortex-agents status                       # Show installation and model status
 ```
 
 <br>
@@ -280,17 +300,17 @@ Every time the build agent starts, it follows a structured pre-implementation ch
 
 ```
 Step 1   branch_status           Am I on a protected branch?
-Step 2   cortex_status           Is .cortex initialized?
+Step 2   cortex_status           Is .cortex initialized? Offer model config if new project.
 Step 3   plan_list / plan_load   Is there a plan for this work?
-Step 4   Ask: strategy           Branch or worktree?
-Step 4b  Ask: launch mode        Stay / terminal / PTY / background?
-Step 5   Execute                 Create branch or launch worktree
+Step 4   Ask: strategy           Worktree (recommended) or branch?
+Step 4b  Ask: launch mode        Terminal tab (recommended) / stay / PTY / background?
+Step 5   Execute                 Create worktree/branch, auto-detect terminal
 Step 6   Implement               Write code following the plan
 Step 7   Quality Gate            Launch @testing + @security in parallel
 Step 8   Ask: documentation      Decision doc / feature doc / flow doc?
 Step 9   session_save            Record what was done and why
 Step 10  task_finalize           Commit, push, create PR
-Step 11  Ask: cleanup            Remove worktree? (if applicable)
+Step 11  Ask: cleanup            Remove worktree + close terminal tab? (if applicable)
 ```
 
 This isn't just documentation - it's enforced by the agent's instructions. The AI follows this workflow every time.
@@ -378,7 +398,7 @@ cd ~/.config/opencode && npm unlink cortex-agents && npm install
 
 - **New skills** - Domain-specific knowledge packs (e.g., Rust, Go, DevOps for AWS)
 - **New agents** - Specialized agents (e.g., reviewer, migration, docs-writer)
-- **Platform support** - Improve terminal detection for Linux/Windows
+- **Terminal drivers** - Improve detection/support for additional terminal emulators
 - **Tool improvements** - Better PR templates, test runners, linter integration
 - **Bug fixes** - Anything that doesn't work as expected
 
