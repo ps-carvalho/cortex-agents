@@ -1,6 +1,6 @@
 {
   "name": "cortex-agents",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "description": "Supercharge OpenCode with structured workflows, intelligent agents, and automated development practices",
   "type": "module",
   "main": "dist/index.js",
@@ -14,6 +14,8 @@
   ],
   "scripts": {
     "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "prepare": "npm run build",
     "postinstall": "echo 'Run: npx cortex-agents install && npx cortex-agents configure'"
   },
@@ -53,11 +55,10 @@
   },
   "devDependencies": {
     "@opencode-ai/plugin": "^1.0.0",
-    "@types/bun": "^1.3.9",
     "@types/node": "^20.0.0",
     "@types/prompts": "^2.4.9",
-    "bun-types": "^1.0.0",
-    "typescript": "^5.0.0"
+    "typescript": "^5.0.0",
+    "vitest": "^3.0.0"
   },
   "dependencies": {
     "prompts": "^2.4.2"

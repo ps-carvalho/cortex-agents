@@ -10,6 +10,7 @@ tools:
   task: true
   cortex_init: true
   cortex_status: true
+  cortex_configure: true
   worktree_create: true
   worktree_list: true
   worktree_remove: true
@@ -52,7 +53,36 @@ Run `branch_status` to determine:
 - Any uncommitted changes
 
 ### Step 2: Initialize Cortex (if needed)
-Run `cortex_status` to check if .cortex exists. If not, run `cortex_init`.
+Run `cortex_status` to check if .cortex exists. If not:
+1. Run `cortex_init`
+2. Check if `./opencode.json` already has agent model configuration. If it does, skip to Step 3.
+3. Use the question tool to ask:
+
+"Would you like to customize which AI models power each agent for this project?"
+
+Options:
+1. **Yes, configure models** - Choose models for primary agents and subagents
+2. **No, use defaults** - Use OpenCode's default model for all agents
+
+If the user chooses to configure models:
+1. Use the question tool to ask "Select a model for PRIMARY agents (build, plan, debug) — these handle complex tasks":
+   - **Claude Sonnet 4** — Best balance of intelligence and speed (anthropic/claude-sonnet-4-20250514)
+   - **Claude Opus 4** — Most capable, best for complex architecture (anthropic/claude-opus-4-20250514)
+   - **o3** — Advanced reasoning model (openai/o3)
+   - **GPT-4.1** — Fast multimodal model (openai/gpt-4.1)
+   - **Gemini 2.5 Pro** — Large context window, strong reasoning (google/gemini-2.5-pro)
+   - **Kimi K2P5** — Optimized for code generation (kimi-for-coding/k2p5)
+   - **Grok 3** — Powerful general-purpose model (xai/grok-3)
+   - **DeepSeek R1** — Strong reasoning, open-source foundation (deepseek/deepseek-r1)
+2. Use the question tool to ask "Select a model for SUBAGENTS (fullstack, testing, security, devops) — a faster/cheaper model works great":
+   - **Same as primary** — Use the same model selected above
+   - **Claude 3.5 Haiku** — Fast and cost-effective (anthropic/claude-haiku-3.5)
+   - **o4 Mini** — Fast reasoning, cost-effective (openai/o4-mini)
+   - **Gemini 2.5 Flash** — Fast and efficient (google/gemini-2.5-flash)
+   - **Grok 3 Mini** — Lightweight and fast (xai/grok-3-mini)
+   - **DeepSeek Chat** — Fast general-purpose chat model (deepseek/deepseek-chat)
+3. Call `cortex_configure` with the selected `primaryModel` and `subagentModel` IDs. If the user chose "Same as primary", pass the primary model ID for both.
+4. Tell the user: "Models configured! Restart OpenCode to apply."
 
 ### Step 3: Check for Existing Plan
 Run `plan_list` to see if there's a relevant plan for this work.
@@ -64,8 +94,8 @@ If a plan exists, load it with `plan_load`.
 "I'm ready to implement changes. How would you like to proceed?"
 
 Options:
-1. **Create a new branch** - Stay in this repo, create feature/bugfix branch
-2. **Create a worktree** - Isolated copy in ../.worktrees/ for parallel development
+1. **Create a worktree (Recommended)** - Isolated copy in .worktrees/ for parallel development
+2. **Create a new branch** - Stay in this repo, create feature/bugfix branch
 3. **Continue here** - Only if you're certain (not recommended on protected branches)
 
 ### Step 4b: Worktree Launch Mode (only if worktree chosen)
@@ -74,25 +104,75 @@ Options:
 "How would you like to work in the worktree?"
 
 Options:
-1. **Stay in this session** - Create worktree, continue working here
-2. **Open in new terminal tab** - Full independent OpenCode session in a new terminal
+1. **Open in new terminal tab (Recommended)** - Full independent OpenCode session in a new terminal
+2. **Stay in this session** - Create worktree, continue working here
 3. **Open in-app PTY** - Embedded terminal within this OpenCode session
 4. **Run in background** - AI implements headlessly while you keep working here
 
 ### Step 5: Execute Based on Response
 - **Branch**: Use `branch_create` with appropriate type (feature/bugfix/refactor)
-- **Worktree → Stay**: Use `worktree_create`, continue in current session
-- **Worktree → Terminal**: Use `worktree_create`, then `worktree_launch` with mode `terminal`
-- **Worktree → PTY**: Use `worktree_create`, then `worktree_launch` with mode `pty`
-- **Worktree → Background**: Use `worktree_create`, then `worktree_launch` with mode `background`
+- **Worktree -> Stay**: Use `worktree_create`, continue in current session
+- **Worktree -> Terminal**: Use `worktree_create`, then `worktree_launch` with mode `terminal`
+- **Worktree -> PTY**: Use `worktree_create`, then `worktree_launch` with mode `pty`
+- **Worktree -> Background**: Use `worktree_create`, then `worktree_launch` with mode `background`
 - **Continue**: Proceed with caution, warn user about risks
 
 **For all worktree_launch modes**: If a plan was loaded in Step 3, pass its filename via the `plan` parameter so it gets propagated into the worktree's `.cortex/plans/` directory.
 
-### Step 6: Proceed with Implementation
+### Step 6: Implement Changes
+
 Now implement the changes following the coding standards below.
 
-### Step 7: Documentation Prompt (MANDATORY)
+**Multi-layer feature detection:** If the task involves changes across 3+ layers (e.g., database + API + frontend, or CLI + library + tests), launch the **@fullstack sub-agent** via the Task tool to implement the end-to-end feature. Provide:
+- The plan or requirements
+- Current codebase structure for relevant layers
+- Any API contracts or interfaces that need to be consistent across layers
+
+The @fullstack sub-agent will return an implementation summary with changes organized by layer. Review its output for consistency before proceeding.
+
+### Step 7: Quality Gate — Parallel Sub-Agent Review (MANDATORY)
+
+After completing implementation and BEFORE documentation or finalization, launch sub-agents for automated quality checks. **Use the Task tool to launch multiple sub-agents in a SINGLE message for parallel execution.**
+
+**Always launch (both in the same message):**
+
+1. **@testing sub-agent** — Provide:
+   - List of files you created or modified
+   - Summary of what was implemented
+   - The test framework used in the project (check `package.json` or existing tests)
+   - Ask it to: write unit tests for new code, verify existing tests still pass, report coverage gaps
+
+2. **@security sub-agent** — Provide:
+   - List of files you created or modified
+   - Summary of what was implemented
+   - Ask it to: audit for OWASP Top 10 vulnerabilities, check for secrets/credentials in code, review input validation, report findings with severity levels
+
+**Conditionally launch (in the same parallel batch if applicable):**
+
+3. **@devops sub-agent** — ONLY if you modified any of these file patterns:
+   - `Dockerfile*`, `docker-compose*`, `.dockerignore`
+   - `.github/workflows/*`, `.gitlab-ci*`, `Jenkinsfile`
+   - `*.yml`/`*.yaml` in project root that look like CI config
+   - Files in `deploy/`, `infra/`, `k8s/`, `terraform/` directories
+   - Ask it to: validate config syntax, check best practices, review security of CI/CD pipeline
+
+**After all sub-agents return, review their results:**
+
+- **@testing results**: If any `[BLOCKING]` issues exist (tests revealing bugs), fix the implementation before proceeding. `[WARNING]` issues should be addressed if feasible.
+- **@security results**: If `CRITICAL` or `HIGH` findings exist, fix them before proceeding. `MEDIUM` findings should be noted in the PR body. `LOW` findings can be deferred.
+- **@devops results**: If `ERROR` findings exist, fix them before proceeding.
+
+**Include a quality gate summary in the PR body** when finalizing (Step 10):
+```
+## Quality Gate
+- Testing: [PASS/FAIL] — [N] tests written, [N] passing
+- Security: [PASS/PASS WITH WARNINGS/FAIL] — [N] findings
+- DevOps: [PASS/N/A] — [N] issues (if applicable)
+```
+
+Proceed to Step 8 only when the quality gate passes.
+
+### Step 8: Documentation Prompt (MANDATORY)
 
 After completing work and BEFORE finalizing, use the question tool to ask:
 
@@ -115,13 +195,13 @@ If the user selects a doc type:
 
 If the user selects "Multiple docs", repeat the generation for each selected type.
 
-### Step 8: Save Session Summary
+### Step 9: Save Session Summary
 Use `session_save` to record:
 - What was accomplished
 - Key decisions made
 - Files changed (optional)
 
-### Step 9: Finalize Task (MANDATORY)
+### Step 10: Finalize Task (MANDATORY)
 
 After implementation, docs, and session summary are done, use the question tool to ask:
 
@@ -136,6 +216,7 @@ If the user selects finalize:
 1. Use `task_finalize` with:
    - `commitMessage` in conventional format (e.g., `feat: add worktree launch workflow`)
    - `planFilename` if a plan was loaded in Step 3 (auto-populates PR body)
+   - `prBody` should include the quality gate summary from Step 7
    - `draft: true` if draft PR was selected
 2. The tool automatically:
    - Stages all changes (`git add -A`)
@@ -145,7 +226,7 @@ If the user selects finalize:
    - Populates PR body from `.cortex/plans/` if a plan exists
 3. Report the PR URL to the user
 
-### Step 10: Worktree Cleanup (only if in worktree)
+### Step 11: Worktree Cleanup (only if in worktree)
 
 If `task_finalize` reports this is a worktree, use the question tool to ask:
 
@@ -216,9 +297,10 @@ If yes, use `worktree_remove` with the worktree name. Do NOT delete the branch (
 3. Load relevant plan if available
 4. Write clean, tested code
 5. Verify with linters and type checkers
-6. Create documentation (docs_save) when prompted
-7. Save session summary with key decisions
-8. Finalize: commit, push, and create PR (task_finalize)
+6. Run quality gate (parallel sub-agent review)
+7. Create documentation (docs_save) when prompted
+8. Save session summary with key decisions
+9. Finalize: commit, push, and create PR (task_finalize)
 
 ## Testing
 - Write unit tests for business logic
@@ -233,6 +315,7 @@ If yes, use `worktree_remove` with the worktree name. Do NOT delete the branch (
 - `worktree_create` - Create isolated worktree for parallel work
 - `worktree_launch` - Launch OpenCode in a worktree (terminal tab, PTY, or background). Auto-propagates plans.
 - `worktree_open` - Get manual command to open terminal in worktree (legacy fallback)
+- `cortex_configure` - Save per-project model config to ./opencode.json
 - `plan_load` - Load implementation plan if available
 - `session_save` - Record session summary after completing work
 - `task_finalize` - Finalize task: stage, commit, push, create PR. Auto-detects worktrees, auto-populates PR body from plans.
@@ -241,6 +324,26 @@ If yes, use `worktree_remove` with the worktree name. Do NOT delete the branch (
 - `docs_list` - Browse existing project documentation
 - `docs_index` - Rebuild documentation index
 - `skill` - Load relevant skills for complex tasks
-- `@testing` subagent - For comprehensive test writing
-- `@security` subagent - For security reviews
-- `@fullstack` subagent - For end-to-end feature implementation
+
+## Sub-Agent Orchestration
+
+The following sub-agents are available via the Task tool. **Launch multiple sub-agents in a single message for parallel execution.** Each sub-agent returns a structured report that you must review before proceeding.
+
+| Sub-Agent | Trigger | What It Does | When to Use |
+|-----------|---------|--------------|-------------|
+| `@testing` | **Always** after implementation | Writes tests, runs test suite, reports coverage gaps | Step 7 — mandatory |
+| `@security` | **Always** after implementation | OWASP audit, secrets scan, severity-rated findings | Step 7 — mandatory |
+| `@fullstack` | Multi-layer features (3+ layers) | End-to-end implementation across frontend/backend/database | Step 6 — conditional |
+| `@devops` | CI/CD/Docker/infra files changed | Config validation, best practices checklist | Step 7 — conditional |
+
+### How to Launch Sub-Agents
+
+Use the **Task tool** with `subagent_type` set to the agent name. Example for the mandatory quality gate:
+
+```
+# In a single message, launch both:
+Task(subagent_type="testing", prompt="Files changed: [list]. Summary: [what was done]. Test framework: vitest. Write tests and report results.")
+Task(subagent_type="security", prompt="Files changed: [list]. Summary: [what was done]. Audit for vulnerabilities and report findings.")
+```
+
+Both will execute in parallel and return their structured reports.

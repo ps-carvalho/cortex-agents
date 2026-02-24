@@ -120,14 +120,16 @@ Handle complex, multi-step work. Use your best model.
 
 ### Subagents
 
-Focused specialists. Invoked with `@mention`. Use a fast/cheap model.
+Focused specialists launched **automatically** as parallel quality gates. Use a fast/cheap model.
 
-| Agent | Role |
-|-------|------|
-| **@fullstack** | End-to-end feature implementation across frontend + backend |
-| **@testing** | Test writing, coverage analysis, TDD workflow |
-| **@security** | Vulnerability scanning, secure coding review |
-| **@devops** | CI/CD pipelines, Docker, deployment automation |
+| Agent | Role | Triggered By |
+|-------|------|-------------|
+| **@testing** | Writes tests, runs suite, reports coverage gaps | Build (always), Debug (always) |
+| **@security** | OWASP audit, secrets scan, severity-rated findings | Build (always), Debug (if security-relevant) |
+| **@fullstack** | End-to-end implementation + feasibility analysis | Build (multi-layer features), Plan (analysis) |
+| **@devops** | Config validation, CI/CD best practices | Build (when CI/Docker/infra files change) |
+
+Subagents return **structured reports** with severity levels (`BLOCKING`, `CRITICAL`, `HIGH`, `MEDIUM`, `LOW`) that the orchestrating agent uses to decide whether to proceed or fix issues first.
 
 <br>
 
@@ -284,13 +286,43 @@ Step 4   Ask: strategy           Branch or worktree?
 Step 4b  Ask: launch mode        Stay / terminal / PTY / background?
 Step 5   Execute                 Create branch or launch worktree
 Step 6   Implement               Write code following the plan
-Step 7   Ask: documentation      Decision doc / feature doc / flow doc?
-Step 8   session_save            Record what was done and why
-Step 9   task_finalize           Commit, push, create PR
-Step 10  Ask: cleanup            Remove worktree? (if applicable)
+Step 7   Quality Gate            Launch @testing + @security in parallel
+Step 8   Ask: documentation      Decision doc / feature doc / flow doc?
+Step 9   session_save            Record what was done and why
+Step 10  task_finalize           Commit, push, create PR
+Step 11  Ask: cleanup            Remove worktree? (if applicable)
 ```
 
 This isn't just documentation - it's enforced by the agent's instructions. The AI follows this workflow every time.
+
+### Sub-Agent Quality Gates
+
+After implementation (Step 7), the build agent **automatically** launches sub-agents in parallel as quality gates:
+
+```
+Build Agent completes implementation
+   |
+   +-- launches in parallel (single message) --+
+   |                                            |
+   v                                            v
+@testing                                   @security
+  Writes unit tests                          OWASP audit
+  Runs test suite                            Secrets scan
+  Reports coverage                           Severity ratings
+  Returns: PASS/FAIL                         Returns: PASS/FAIL
+   |                                            |
+   +-------- results reviewed by Build ---------+
+   |
+   v
+Quality Gate Summary included in PR body
+```
+
+The debug agent uses the same pattern: `@testing` for regression tests (always) and `@security` when the fix touches sensitive code.
+
+Sub-agents use **structured return contracts** so results are actionable:
+- `BLOCKING` / `CRITICAL` / `HIGH` findings block finalization
+- `MEDIUM` findings are noted in the PR body
+- `LOW` findings are deferred
 
 ### Agent Handover
 

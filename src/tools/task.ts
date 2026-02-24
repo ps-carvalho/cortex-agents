@@ -7,6 +7,7 @@ import {
   extractPlanSections,
   buildPrBodyFromPlan,
 } from "../utils/plan-extract.js";
+import { git, gh, which } from "../utils/shell.js";
 
 const PROTECTED_BRANCHES = ["main", "master", "develop", "production", "staging"];
 const DOCS_DIR = "docs";
@@ -18,9 +19,8 @@ const DOCS_DIR = "docs";
  */
 async function checkGhCli(cwd: string): Promise<{ ok: boolean; error?: string }> {
   // Check if gh exists
-  try {
-    await Bun.$`which gh`.quiet().text();
-  } catch {
+  const ghPath = await which("gh");
+  if (!ghPath) {
     return {
       ok: false,
       error:
@@ -30,7 +30,7 @@ async function checkGhCli(cwd: string): Promise<{ ok: boolean; error?: string }>
 
   // Check if authenticated
   try {
-    await Bun.$`gh auth status`.cwd(cwd).quiet().text();
+    await gh(cwd, "auth", "status");
   } catch {
     return {
       ok: false,
@@ -47,8 +47,8 @@ async function checkGhCli(cwd: string): Promise<{ ok: boolean; error?: string }>
  */
 async function checkRemote(cwd: string): Promise<{ ok: boolean; error?: string }> {
   try {
-    const remotes = await Bun.$`git -C ${cwd} remote -v`.quiet().text();
-    if (!remotes.includes("origin")) {
+    const { stdout } = await git(cwd, "remote", "-v");
+    if (!stdout.includes("origin")) {
       return {
         ok: false,
         error:
@@ -88,13 +88,13 @@ function checkDocsExist(worktree: string): { exists: boolean; count: number } {
  */
 async function getCommitLog(cwd: string, baseBranch: string): Promise<string> {
   try {
-    const log = await Bun.$`git -C ${cwd} log ${baseBranch}..HEAD --oneline`.quiet().text();
-    return log.trim();
+    const { stdout } = await git(cwd, "log", `${baseBranch}..HEAD`, "--oneline");
+    return stdout.trim();
   } catch {
     // If base branch doesn't exist locally, try origin/<base>
     try {
-      const log = await Bun.$`git -C ${cwd} log origin/${baseBranch}..HEAD --oneline`.quiet().text();
-      return log.trim();
+      const { stdout } = await git(cwd, "log", `origin/${baseBranch}..HEAD`, "--oneline");
+      return stdout.trim();
     } catch {
       return "";
     }
@@ -152,7 +152,7 @@ export const finalize = tool({
 
     // ── 1. Validate: git repo ─────────────────────────────────
     try {
-      await Bun.$`git -C ${cwd} rev-parse --git-dir`.quiet().text();
+      await git(cwd, "rev-parse", "--git-dir");
     } catch {
       return "✗ Error: Not in a git repository.";
     }
@@ -179,8 +179,8 @@ Create a feature/bugfix branch first with branch_create or worktree_create.`;
       } else {
         // Try to detect default branch from origin
         try {
-          const defaultRef = await Bun.$`git -C ${cwd} symbolic-ref refs/remotes/origin/HEAD`.quiet().text();
-          baseBranch = defaultRef.trim().replace("refs/remotes/origin/", "");
+          const { stdout } = await git(cwd, "symbolic-ref", "refs/remotes/origin/HEAD");
+          baseBranch = stdout.trim().replace("refs/remotes/origin/", "");
         } catch {
           baseBranch = "main"; // Sensible default
         }
@@ -215,7 +215,7 @@ Create a feature/bugfix branch first with branch_create or worktree_create.`;
 
     // ── 6. Stage all changes ──────────────────────────────────
     try {
-      await Bun.$`git -C ${cwd} add -A`.quiet();
+      await git(cwd, "add", "-A");
     } catch (error: any) {
       return `✗ Error staging changes: ${error.message || error}`;
     }
@@ -226,14 +226,14 @@ Create a feature/bugfix branch first with branch_create or worktree_create.`;
 
     try {
       // Check if there's anything to commit
-      const status = await Bun.$`git -C ${cwd} status --porcelain`.quiet().text();
-      if (!status.trim()) {
+      const { stdout: statusOut } = await git(cwd, "status", "--porcelain");
+      if (!statusOut.trim()) {
         commitSkipped = true;
         output.push("No new changes to commit (working tree clean)");
       } else {
-        await Bun.$`git -C ${cwd} commit -m ${commitMessage}`.quiet();
-        const hash = await Bun.$`git -C ${cwd} rev-parse --short HEAD`.quiet().text();
-        commitHash = hash.trim();
+        await git(cwd, "commit", "-m", commitMessage);
+        const { stdout: hashOut } = await git(cwd, "rev-parse", "--short", "HEAD");
+        commitHash = hashOut.trim();
         output.push(`Committed: ${commitHash} — ${commitMessage}`);
       }
     } catch (error: any) {
@@ -242,7 +242,7 @@ Create a feature/bugfix branch first with branch_create or worktree_create.`;
 
     // ── 8. Push to origin ─────────────────────────────────────
     try {
-      await Bun.$`git -C ${cwd} push -u origin ${branchName}`.quiet();
+      await git(cwd, "push", "-u", "origin", branchName);
       output.push(`Pushed to origin/${branchName}`);
     } catch (error: any) {
       return `✗ Error pushing to origin: ${error.message || error}
@@ -278,48 +278,27 @@ All previous steps succeeded (changes committed). Try pushing manually:
 
     try {
       // Check if PR already exists for this branch
-      const existingPr = await Bun.$`gh pr view ${branchName} --json url --jq .url`
-        .cwd(cwd).quiet().nothrow().text();
+      const { stdout: existingPr } = await gh(cwd, "pr", "view", branchName, "--json", "url", "--jq", ".url");
 
       if (existingPr.trim()) {
         prUrl = existingPr.trim();
         output.push(`PR already exists: ${prUrl}`);
       } else {
-        // Create new PR
-        const draftFlag = draft ? "--draft" : "";
-        // Use a heredoc-style approach via stdin to handle complex body content
-        const bodyFile = path.join(cwd, ".cortex", ".pr-body-tmp.md");
-        const cortexDir = path.join(cwd, ".cortex");
-        if (!fs.existsSync(cortexDir)) {
-          fs.mkdirSync(cortexDir, { recursive: true });
-        }
-        fs.writeFileSync(bodyFile, prBodyContent);
-
-        try {
-          const createArgs = [
-            "gh", "pr", "create",
-            "--base", baseBranch,
-            "--title", finalPrTitle,
-            "--body-file", bodyFile,
-          ];
-          if (draft) createArgs.push("--draft");
-
-          const result = await Bun.$`gh pr create --base ${baseBranch} --title ${finalPrTitle} --body-file ${bodyFile} ${draft ? "--draft" : ""}`.cwd(cwd).quiet().text();
-          prUrl = result.trim();
-          output.push(`PR created: ${prUrl}`);
-        } finally {
-          // Clean up temp file
-          if (fs.existsSync(bodyFile)) {
-            fs.unlinkSync(bodyFile);
-          }
-        }
+        prUrl = await createPr(cwd, baseBranch, finalPrTitle, prBodyContent, draft);
+        output.push(`PR created: ${prUrl}`);
       }
-    } catch (error: any) {
-      // PR creation failed but everything else succeeded
-      output.push(`⚠ PR creation failed: ${error.message || error}`);
-      output.push("");
-      output.push("Changes are committed and pushed. Create the PR manually:");
-      output.push(`  gh pr create --base ${baseBranch} --title "${finalPrTitle}"`);
+    } catch {
+      // PR doesn't exist yet, create it
+      try {
+        prUrl = await createPr(cwd, baseBranch, finalPrTitle, prBodyContent, draft);
+        output.push(`PR created: ${prUrl}`);
+      } catch (error: any) {
+        // PR creation failed but everything else succeeded
+        output.push(`⚠ PR creation failed: ${error.message || error}`);
+        output.push("");
+        output.push("Changes are committed and pushed. Create the PR manually:");
+        output.push(`  gh pr create --base ${baseBranch} --title "${finalPrTitle}"`);
+      }
     }
 
     // ── Build final output ────────────────────────────────────
@@ -338,3 +317,39 @@ All previous steps succeeded (changes committed). Try pushing manually:
     return finalOutput;
   },
 });
+
+/**
+ * Create a PR using gh CLI with array-based args (no shell injection).
+ * Uses a temp body file to avoid shell escaping issues with PR body content.
+ */
+async function createPr(
+  cwd: string,
+  baseBranch: string,
+  title: string,
+  body: string,
+  draft: boolean,
+): Promise<string> {
+  const bodyFile = path.join(cwd, ".cortex", ".pr-body-tmp.md");
+  const cortexDir = path.join(cwd, ".cortex");
+  if (!fs.existsSync(cortexDir)) {
+    fs.mkdirSync(cortexDir, { recursive: true });
+  }
+  fs.writeFileSync(bodyFile, body);
+
+  try {
+    const createArgs = [
+      "pr", "create",
+      "--base", baseBranch,
+      "--title", title,
+      "--body-file", bodyFile,
+    ];
+    if (draft) createArgs.push("--draft");
+
+    const { stdout } = await gh(cwd, ...createArgs);
+    return stdout.trim();
+  } finally {
+    if (fs.existsSync(bodyFile)) {
+      fs.unlinkSync(bodyFile);
+    }
+  }
+}

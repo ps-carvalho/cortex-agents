@@ -1,6 +1,7 @@
 import { tool } from "@opencode-ai/plugin";
 import * as fs from "fs";
 import * as path from "path";
+import { git } from "../utils/shell.js";
 
 const CORTEX_DIR = ".cortex";
 const SESSIONS_DIR = "sessions";
@@ -61,7 +62,8 @@ export const save = tool({
     let currentBranch = branch;
     if (!currentBranch) {
       try {
-        currentBranch = (await Bun.$`git branch --show-current`.cwd(context.worktree).text()).trim();
+        const { stdout } = await git(context.worktree, "branch", "--show-current");
+        currentBranch = stdout.trim();
       } catch {
         currentBranch = "unknown";
       }
