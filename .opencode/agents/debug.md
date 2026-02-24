@@ -68,13 +68,44 @@ Options:
 - Add regression test to prevent recurrence
 - Verify fix works as expected
 
-### Step 6: Save Session Summary
+### Step 6: Post-Fix Quality Gate (MANDATORY)
+
+After implementing the fix, launch sub-agents for validation. **Use the Task tool to launch sub-agents in a SINGLE message for parallel execution.**
+
+**Always launch:**
+
+1. **@testing sub-agent** — Provide:
+   - The file(s) you modified to fix the bug
+   - Description of the bug (root cause) and the fix applied
+   - The test framework used in the project
+   - Ask it to: write a regression test that would have caught this bug, verify the fix doesn't break existing tests, report results
+
+**Conditionally launch (in parallel with @testing if applicable):**
+
+2. **@security sub-agent** — Launch if the bug or fix involves ANY of:
+   - Authentication, authorization, or session management
+   - Input validation or output encoding
+   - Cryptography, hashing, or secrets
+   - SQL queries, command execution, or file system access
+   - CORS, CSP, or security headers
+   - Deserialization or data parsing
+   - Provide: the bug description, the fix, and ask for a security audit to ensure the fix doesn't introduce new vulnerabilities
+
+**After sub-agents return:**
+
+- **@testing results**: Incorporate the regression test. If any `[BLOCKING]` issues exist (test revealing the fix is incomplete), address them before proceeding.
+- **@security results**: If `CRITICAL` or `HIGH` findings exist, fix them before proceeding. Note any `MEDIUM` findings.
+
+Proceed to Step 7 only when the quality gate passes.
+
+### Step 7: Save Session Summary
 Use `session_save` to document:
 - Root cause identified
 - Fix implemented
 - Key decisions made
+- Quality gate results (test count, security verdict)
 
-### Step 7: Documentation Prompt (MANDATORY)
+### Step 8: Documentation Prompt (MANDATORY)
 
 After fixing a bug and BEFORE committing, use the question tool to ask:
 
@@ -158,6 +189,25 @@ If the user selects a doc type:
 - Configuration errors
 - Dependency conflicts
 
-## Subagent Usage
-- Use `@security` subagent if the issue may be security-related
-- Use `@testing` subagent to write regression tests
+## Sub-Agent Orchestration
+
+The following sub-agents are available via the Task tool. **Launch multiple sub-agents in a single message for parallel execution.** Each sub-agent returns a structured report that you must review before proceeding.
+
+| Sub-Agent | Trigger | What It Does | When to Use |
+|-----------|---------|--------------|-------------|
+| `@testing` | **Always** after fix | Writes regression test, validates existing tests | Step 6 — mandatory |
+| `@security` | Fix touches auth/crypto/input validation/SQL/commands | Security audit of the fix | Step 6 — conditional |
+
+### How to Launch Sub-Agents
+
+Use the **Task tool** with `subagent_type` set to the agent name. Example:
+
+```
+# Mandatory: always after fix
+Task(subagent_type="testing", prompt="Bug: [description]. Fix: [what was changed]. Files modified: [list]. Write a regression test and verify existing tests pass.")
+
+# Conditional: only if security-relevant
+Task(subagent_type="security", prompt="Bug: [description]. Fix: [what was changed]. Files: [list]. Audit the fix for security vulnerabilities.")
+```
+
+Both can execute in parallel when launched in the same message.

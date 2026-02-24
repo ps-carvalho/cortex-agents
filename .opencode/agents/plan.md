@@ -38,10 +38,29 @@ Run `plan_list` to see if there are related plans that should be considered.
 Run `docs_list` to check existing project documentation (decisions, features, flows) for context.
 
 ### Step 3: Analyze and Create Plan
+
 - Read relevant files to understand the codebase
 - Review existing documentation (feature docs, flow docs, decision docs) for architectural context
 - Analyze requirements thoroughly
 - Create a comprehensive plan with mermaid diagrams
+
+**Sub-agent assistance for complex plans:**
+
+When the plan involves complex, multi-faceted features, launch sub-agents via the Task tool to gather expert analysis. **Launch multiple sub-agents in a single message for parallel execution when both conditions apply.**
+
+1. **@fullstack sub-agent** — Launch when the feature spans multiple layers (frontend, backend, database, infrastructure). Provide:
+   - The feature requirements or user story
+   - Current codebase structure and technology stack
+   - Ask it to: analyze implementation feasibility, estimate effort, identify challenges and risks, recommend an approach
+
+   Use its feasibility analysis to inform the plan's technical approach, effort estimates, and risk assessment.
+
+2. **@security sub-agent** — Launch when the feature involves authentication, authorization, data handling, cryptography, or external API integrations. Provide:
+   - The feature requirements and current security posture
+   - Any existing auth/security patterns in the codebase
+   - Ask it to: perform a threat model, identify security requirements, flag potential vulnerabilities in the proposed design
+
+   Use its findings to add security-specific tasks and risks to the plan.
 
 ### Step 4: Save the Plan
 Use `plan_save` with:
@@ -194,4 +213,24 @@ sequenceDiagram
 - `session_save` - Save session summary
 - `branch_status` - Check current git state
 - `skill` - Load architecture and planning skills
-- `@fullstack` subagent - For detailed implementation considerations
+
+## Sub-Agent Orchestration
+
+The following sub-agents are available via the Task tool for analysis assistance. **Launch multiple sub-agents in a single message for parallel execution when both conditions apply.**
+
+| Sub-Agent | Trigger | What It Does | When to Use |
+|-----------|---------|--------------|-------------|
+| `@fullstack` | Feature spans 3+ layers | Feasibility analysis, effort estimation, challenge identification | Step 3 — conditional |
+| `@security` | Feature involves auth/data/crypto/external APIs | Threat modeling, security requirements, vulnerability flags | Step 3 — conditional |
+
+### How to Launch Sub-Agents
+
+Use the **Task tool** with `subagent_type` set to the agent name. Example:
+
+```
+# Parallel launch when both conditions apply:
+Task(subagent_type="fullstack", prompt="Feature: [requirements]. Stack: [tech stack]. Analyze feasibility and estimate effort.")
+Task(subagent_type="security", prompt="Feature: [requirements]. Current auth: [patterns]. Perform threat model and identify security requirements.")
+```
+
+Both will execute in parallel and return their structured reports. Use the results to enrich the plan with implementation details and security considerations.
