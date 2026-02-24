@@ -10,6 +10,7 @@ tools:
   task: true
   cortex_init: true
   cortex_status: true
+  cortex_configure: true
   worktree_create: true
   worktree_list: true
   worktree_remove: true
@@ -52,7 +53,36 @@ Run `branch_status` to determine:
 - Any uncommitted changes
 
 ### Step 2: Initialize Cortex (if needed)
-Run `cortex_status` to check if .cortex exists. If not, run `cortex_init`.
+Run `cortex_status` to check if .cortex exists. If not:
+1. Run `cortex_init`
+2. Check if `./opencode.json` already has agent model configuration. If it does, skip to Step 3.
+3. Use the question tool to ask:
+
+"Would you like to customize which AI models power each agent for this project?"
+
+Options:
+1. **Yes, configure models** - Choose models for primary agents and subagents
+2. **No, use defaults** - Use OpenCode's default model for all agents
+
+If the user chooses to configure models:
+1. Use the question tool to ask "Select a model for PRIMARY agents (build, plan, debug) — these handle complex tasks":
+   - **Claude Sonnet 4** — Best balance of intelligence and speed (anthropic/claude-sonnet-4-20250514)
+   - **Claude Opus 4** — Most capable, best for complex architecture (anthropic/claude-opus-4-20250514)
+   - **o3** — Advanced reasoning model (openai/o3)
+   - **GPT-4.1** — Fast multimodal model (openai/gpt-4.1)
+   - **Gemini 2.5 Pro** — Large context window, strong reasoning (google/gemini-2.5-pro)
+   - **Kimi K2P5** — Optimized for code generation (kimi-for-coding/k2p5)
+   - **Grok 3** — Powerful general-purpose model (xai/grok-3)
+   - **DeepSeek R1** — Strong reasoning, open-source foundation (deepseek/deepseek-r1)
+2. Use the question tool to ask "Select a model for SUBAGENTS (fullstack, testing, security, devops) — a faster/cheaper model works great":
+   - **Same as primary** — Use the same model selected above
+   - **Claude 3.5 Haiku** — Fast and cost-effective (anthropic/claude-haiku-3.5)
+   - **o4 Mini** — Fast reasoning, cost-effective (openai/o4-mini)
+   - **Gemini 2.5 Flash** — Fast and efficient (google/gemini-2.5-flash)
+   - **Grok 3 Mini** — Lightweight and fast (xai/grok-3-mini)
+   - **DeepSeek Chat** — Fast general-purpose chat model (deepseek/deepseek-chat)
+3. Call `cortex_configure` with the selected `primaryModel` and `subagentModel` IDs. If the user chose "Same as primary", pass the primary model ID for both.
+4. Tell the user: "Models configured! Restart OpenCode to apply."
 
 ### Step 3: Check for Existing Plan
 Run `plan_list` to see if there's a relevant plan for this work.
@@ -64,8 +94,8 @@ If a plan exists, load it with `plan_load`.
 "I'm ready to implement changes. How would you like to proceed?"
 
 Options:
-1. **Create a new branch** - Stay in this repo, create feature/bugfix branch
-2. **Create a worktree** - Isolated copy in ../.worktrees/ for parallel development
+1. **Create a worktree (Recommended)** - Isolated copy in .worktrees/ for parallel development
+2. **Create a new branch** - Stay in this repo, create feature/bugfix branch
 3. **Continue here** - Only if you're certain (not recommended on protected branches)
 
 ### Step 4b: Worktree Launch Mode (only if worktree chosen)
@@ -74,8 +104,8 @@ Options:
 "How would you like to work in the worktree?"
 
 Options:
-1. **Stay in this session** - Create worktree, continue working here
-2. **Open in new terminal tab** - Full independent OpenCode session in a new terminal
+1. **Open in new terminal tab (Recommended)** - Full independent OpenCode session in a new terminal
+2. **Stay in this session** - Create worktree, continue working here
 3. **Open in-app PTY** - Embedded terminal within this OpenCode session
 4. **Run in background** - AI implements headlessly while you keep working here
 
@@ -285,6 +315,7 @@ If yes, use `worktree_remove` with the worktree name. Do NOT delete the branch (
 - `worktree_create` - Create isolated worktree for parallel work
 - `worktree_launch` - Launch OpenCode in a worktree (terminal tab, PTY, or background). Auto-propagates plans.
 - `worktree_open` - Get manual command to open terminal in worktree (legacy fallback)
+- `cortex_configure` - Save per-project model config to ./opencode.json
 - `plan_load` - Load implementation plan if available
 - `session_save` - Record session summary after completing work
 - `task_finalize` - Finalize task: stage, commit, push, create PR. Auto-detects worktrees, auto-populates PR body from plans.

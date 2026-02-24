@@ -10,10 +10,12 @@ tools:
   task: true
   cortex_init: true
   cortex_status: true
+  cortex_configure: true
   worktree_create: true
   worktree_list: true
   worktree_remove: true
   worktree_open: true
+  worktree_launch: true
   branch_create: true
   branch_status: true
   branch_switch: true
@@ -40,6 +42,38 @@ Run `branch_status` to determine:
 - Whether on main/master/develop (protected branches)
 - Any uncommitted changes
 
+### Step 1b: Initialize Cortex (if needed)
+Run `cortex_status` to check if .cortex exists. If not:
+1. Run `cortex_init`
+2. Check if `./opencode.json` already has agent model configuration. If it does, skip to Step 2.
+3. Use the question tool to ask:
+
+"Would you like to customize which AI models power each agent for this project?"
+
+Options:
+1. **Yes, configure models** - Choose models for primary agents and subagents
+2. **No, use defaults** - Use OpenCode's default model for all agents
+
+If the user chooses to configure models:
+1. Use the question tool to ask "Select a model for PRIMARY agents (build, plan, debug) — these handle complex tasks":
+   - **Claude Sonnet 4** — Best balance of intelligence and speed (anthropic/claude-sonnet-4-20250514)
+   - **Claude Opus 4** — Most capable, best for complex architecture (anthropic/claude-opus-4-20250514)
+   - **o3** — Advanced reasoning model (openai/o3)
+   - **GPT-4.1** — Fast multimodal model (openai/gpt-4.1)
+   - **Gemini 2.5 Pro** — Large context window, strong reasoning (google/gemini-2.5-pro)
+   - **Kimi K2P5** — Optimized for code generation (kimi-for-coding/k2p5)
+   - **Grok 3** — Powerful general-purpose model (xai/grok-3)
+   - **DeepSeek R1** — Strong reasoning, open-source foundation (deepseek/deepseek-r1)
+2. Use the question tool to ask "Select a model for SUBAGENTS (fullstack, testing, security, devops) — a faster/cheaper model works great":
+   - **Same as primary** — Use the same model selected above
+   - **Claude 3.5 Haiku** — Fast and cost-effective (anthropic/claude-haiku-3.5)
+   - **o4 Mini** — Fast reasoning, cost-effective (openai/o4-mini)
+   - **Gemini 2.5 Flash** — Fast and efficient (google/gemini-2.5-flash)
+   - **Grok 3 Mini** — Lightweight and fast (xai/grok-3-mini)
+   - **DeepSeek Chat** — Fast general-purpose chat model (deepseek/deepseek-chat)
+3. Call `cortex_configure` with the selected `primaryModel` and `subagentModel` IDs. If the user chose "Same as primary", pass the primary model ID for both.
+4. Tell the user: "Models configured! Restart OpenCode to apply."
+
 ### Step 2: Assess Bug Severity
 Determine if this is:
 - **Critical/Production**: Needs hotfix branch or worktree (high urgency)
@@ -52,15 +86,15 @@ Determine if this is:
 "I've diagnosed the issue and am ready to implement a fix. How would you like to proceed?"
 
 Options:
-1. **Create bugfix branch** - Standard bugfix workflow (bugfix/issue-name)
-2. **Create hotfix worktree** - For critical production issues (../.worktrees/hotfix-name)
-3. **Create worktree + open new terminal** - Fix while continuing other work
+1. **Create worktree + open new terminal (Recommended)** - Fix in an isolated worktree with a new terminal tab
+2. **Create bugfix branch** - Standard bugfix workflow (bugfix/issue-name)
+3. **Create hotfix worktree (stay here)** - For critical production issues, continue in this session
 4. **Continue on current branch** - Only if already on appropriate feature branch
 
 ### Step 4: Execute Based on Response
+- **Worktree + Terminal**: Use `worktree_create` with type "bugfix" (or "hotfix" for critical issues), then `worktree_launch` with mode `terminal`
 - **Bugfix branch**: Use `branch_create` with type "bugfix"
-- **Hotfix worktree**: Use `worktree_create` with type "hotfix"
-- **Worktree + Terminal**: Use `worktree_create`, then `worktree_open`
+- **Hotfix worktree (stay)**: Use `worktree_create` with type "hotfix", continue in current session
 - **Continue**: Verify user is on appropriate branch, then proceed
 
 ### Step 5: Implement Fix
@@ -168,7 +202,9 @@ If the user selects a doc type:
 - `branch_status` - Check git state before making changes
 - `branch_create` - Create bugfix branch
 - `worktree_create` - Create hotfix worktree for critical issues
-- `worktree_open` - Get command to open new terminal
+- `worktree_launch` - Launch OpenCode in a worktree (terminal tab, PTY, or background)
+- `worktree_open` - Get manual command to open terminal in worktree (legacy fallback)
+- `cortex_configure` - Save per-project model config to ./opencode.json
 - `session_save` - Document the debugging session
 - `docs_init` - Initialize docs/ folder structure
 - `docs_save` - Save documentation with mermaid diagrams

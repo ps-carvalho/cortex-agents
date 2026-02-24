@@ -3,7 +3,15 @@ import type { PluginInput } from "@opencode-ai/plugin";
 import * as fs from "fs";
 import * as path from "path";
 import { propagatePlan } from "../utils/propagate.js";
-import { exec, git, which, shellEscape, spawn as shellSpawn } from "../utils/shell.js";
+import { exec, git, which, shellEscape, kill, spawn as shellSpawn } from "../utils/shell.js";
+import {
+  detectDriver,
+  closeSession,
+  writeSession,
+  readSession,
+  type TerminalSession,
+  type TabOpenOptions,
+} from "../utils/terminal.js";
 
 const WORKTREE_ROOT = ".worktrees";
 
@@ -11,56 +19,87 @@ const WORKTREE_ROOT = ".worktrees";
 type Client = PluginInput["client"];
 type Shell = PluginInput["$"];
 
-export const create = tool({
-  description:
-    "Create a new git worktree for isolated development. Worktrees are created in .worktrees/ at the project root.",
-  args: {
-    name: tool.schema
-      .string()
-      .describe("Worktree name (e.g., 'auth-feature', 'login-bugfix')"),
-    type: tool.schema
-      .enum(["feature", "bugfix", "hotfix", "refactor", "spike", "docs", "test"])
-      .describe("Type of work - determines branch prefix"),
-  },
-  async execute(args, context) {
-    const { name, type } = args;
-    const branchName = `${type}/${name}`;
-    const worktreePath = path.join(context.worktree, WORKTREE_ROOT, name);
-    const absoluteWorktreePath = path.resolve(worktreePath);
+/**
+ * Factory function that creates the worktree_create tool with access
+ * to the OpenCode client for toast notifications.
+ */
+export function createCreate(client: Client) {
+  return tool({
+    description:
+      "Create a new git worktree for isolated development. Worktrees are created in .worktrees/ at the project root.",
+    args: {
+      name: tool.schema
+        .string()
+        .describe("Worktree name (e.g., 'auth-feature', 'login-bugfix')"),
+      type: tool.schema
+        .enum(["feature", "bugfix", "hotfix", "refactor", "spike", "docs", "test"])
+        .describe("Type of work - determines branch prefix"),
+    },
+    async execute(args, context) {
+      const { name, type } = args;
+      const branchName = `${type}/${name}`;
+      const worktreePath = path.join(context.worktree, WORKTREE_ROOT, name);
+      const absoluteWorktreePath = path.resolve(worktreePath);
 
-    // Check if we're in a git repository
-    try {
-      await git(context.worktree, "rev-parse", "--git-dir");
-    } catch {
-      return "✗ Error: Not in a git repository. Initialize git first.";
-    }
+      // Check if we're in a git repository
+      try {
+        await git(context.worktree, "rev-parse", "--git-dir");
+      } catch {
+        return "✗ Error: Not in a git repository. Initialize git first.";
+      }
 
-    // Check if worktree already exists
-    if (fs.existsSync(absoluteWorktreePath)) {
-      return `✗ Error: Worktree already exists at ${absoluteWorktreePath}
+      // Check if worktree already exists
+      if (fs.existsSync(absoluteWorktreePath)) {
+        return `✗ Error: Worktree already exists at ${absoluteWorktreePath}
 
 Use worktree_list to see existing worktrees.`;
-    }
-
-    // Create parent directory if needed
-    const worktreeParent = path.dirname(absoluteWorktreePath);
-    if (!fs.existsSync(worktreeParent)) {
-      fs.mkdirSync(worktreeParent, { recursive: true });
-    }
-
-    // Create the worktree with a new branch
-    try {
-      await git(context.worktree, "worktree", "add", "-b", branchName, absoluteWorktreePath);
-    } catch {
-      // Branch might already exist, try without -b
-      try {
-        await git(context.worktree, "worktree", "add", absoluteWorktreePath, branchName);
-      } catch (error2: any) {
-        return `✗ Error creating worktree: ${error2.message || error2}`;
       }
-    }
 
-    return `✓ Created worktree successfully
+      // Create parent directory if needed
+      const worktreeParent = path.dirname(absoluteWorktreePath);
+      if (!fs.existsSync(worktreeParent)) {
+        fs.mkdirSync(worktreeParent, { recursive: true });
+      }
+
+      // Create the worktree with a new branch
+      try {
+        await git(context.worktree, "worktree", "add", "-b", branchName, absoluteWorktreePath);
+      } catch {
+        // Branch might already exist, try without -b
+        try {
+          await git(context.worktree, "worktree", "add", absoluteWorktreePath, branchName);
+        } catch (error2: any) {
+          try {
+            await client.tui.showToast({
+              body: {
+                title: `Worktree: ${name}`,
+                message: `Failed to create: ${error2.message || error2}`,
+                variant: "error",
+                duration: 8000,
+              },
+            });
+          } catch {
+            // Toast failure is non-fatal
+          }
+          return `✗ Error creating worktree: ${error2.message || error2}`;
+        }
+      }
+
+      // Notify via toast
+      try {
+        await client.tui.showToast({
+          body: {
+            title: `Worktree: ${name}`,
+            message: `Created on branch ${branchName}`,
+            variant: "success",
+            duration: 4000,
+          },
+        });
+      } catch {
+        // Toast failure is non-fatal
+      }
+
+      return `✓ Created worktree successfully
 
 Branch: ${branchName}
 Path: ${absoluteWorktreePath}
@@ -69,8 +108,9 @@ To work in this worktree:
   cd ${absoluteWorktreePath}
 
 Or use worktree_open to get a command to open a new terminal there.`;
-  },
-});
+    },
+  });
+}
 
 export const list = tool({
   description: "List all git worktrees for this project",
@@ -107,67 +147,141 @@ export const list = tool({
   },
 });
 
-export const remove = tool({
-  description:
-    "Remove a git worktree (after merging). Optionally deletes the branch.",
-  args: {
-    name: tool.schema.string().describe("Worktree name to remove"),
-    deleteBranch: tool.schema
-      .boolean()
-      .optional()
-      .describe("Also delete the associated branch (default: false)"),
-  },
-  async execute(args, context) {
-    const { name, deleteBranch = false } = args;
-    const worktreePath = path.join(context.worktree, WORKTREE_ROOT, name);
-    const absoluteWorktreePath = path.resolve(worktreePath);
+/**
+ * Factory function that creates the worktree_remove tool with access
+ * to the OpenCode client for toast notifications and PTY cleanup.
+ */
+export function createRemove(client: Client) {
+  return tool({
+    description:
+      "Remove a git worktree (after merging). Optionally deletes the branch.",
+    args: {
+      name: tool.schema.string().describe("Worktree name to remove"),
+      deleteBranch: tool.schema
+        .boolean()
+        .optional()
+        .describe("Also delete the associated branch (default: false)"),
+    },
+    async execute(args, context) {
+      const { name, deleteBranch = false } = args;
+      const worktreePath = path.join(context.worktree, WORKTREE_ROOT, name);
+      const absoluteWorktreePath = path.resolve(worktreePath);
 
-    // Check if worktree exists
-    if (!fs.existsSync(absoluteWorktreePath)) {
-      return `✗ Error: Worktree not found at ${absoluteWorktreePath}
+      // Check if worktree exists
+      if (!fs.existsSync(absoluteWorktreePath)) {
+        return `✗ Error: Worktree not found at ${absoluteWorktreePath}
 
 Use worktree_list to see existing worktrees.`;
-    }
+      }
 
-    // Get branch name before removing
-    let branchName = "";
-    try {
-      const { stdout } = await git(absoluteWorktreePath, "branch", "--show-current");
-      branchName = stdout.trim();
-    } catch {
-      // Ignore error, branch detection is optional
-    }
-
-    // Remove the worktree
-    try {
-      await git(context.worktree, "worktree", "remove", absoluteWorktreePath);
-    } catch {
-      // Try force remove if there are changes
+      // Get branch name before removing
+      let branchName = "";
       try {
-        await git(context.worktree, "worktree", "remove", "--force", absoluteWorktreePath);
-      } catch (error2: any) {
-        return `✗ Error removing worktree: ${error2.message || error2}
+        const { stdout } = await git(absoluteWorktreePath, "branch", "--show-current");
+        branchName = stdout.trim();
+      } catch {
+        // Ignore error, branch detection is optional
+      }
+
+      // ── Close terminal session BEFORE git removes the directory ──
+      let closedSession = false;
+      const session = readSession(absoluteWorktreePath);
+      if (session) {
+        if (session.mode === "pty" && session.ptyId) {
+          // Close PTY session via OpenCode SDK
+          try {
+            await client.pty.remove({ path: { id: session.ptyId } });
+            closedSession = true;
+          } catch {
+            // PTY may already be closed
+          }
+        } else if (session.mode === "terminal") {
+          // Close terminal tab via driver
+          closedSession = await closeSession(session);
+        } else if (session.mode === "background" && session.pid) {
+          closedSession = kill(session.pid);
+        }
+
+        // Fallback: kill PID if driver close failed
+        if (!closedSession && session.pid) {
+          kill(session.pid);
+        }
+      }
+
+      // Also clean up legacy .background-pid file
+      const bgPidFile = path.join(absoluteWorktreePath, ".cortex", ".background-pid");
+      if (fs.existsSync(bgPidFile)) {
+        try {
+          const bgData = JSON.parse(fs.readFileSync(bgPidFile, "utf-8"));
+          if (bgData.pid) kill(bgData.pid);
+        } catch {
+          // Ignore parse errors
+        }
+      }
+
+      // ── Remove the worktree ─────────────────────────────────────
+      try {
+        await git(context.worktree, "worktree", "remove", absoluteWorktreePath);
+      } catch {
+        // Try force remove if there are changes
+        try {
+          await git(context.worktree, "worktree", "remove", "--force", absoluteWorktreePath);
+        } catch (error2: any) {
+          try {
+            await client.tui.showToast({
+              body: {
+                title: `Worktree: ${name}`,
+                message: `Failed to remove: ${error2.message || error2}`,
+                variant: "error",
+                duration: 8000,
+              },
+            });
+          } catch {
+            // Toast failure is non-fatal
+          }
+          return `✗ Error removing worktree: ${error2.message || error2}
 
 The worktree may have uncommitted changes. Commit or stash them first.`;
+        }
       }
-    }
 
-    let output = `✓ Removed worktree at ${absoluteWorktreePath}`;
+      let output = `✓ Removed worktree at ${absoluteWorktreePath}`;
+      if (closedSession && session) {
+        output += `\n✓ Closed ${session.mode === "pty" ? "PTY session" : `${session.terminal} tab`}`;
+      }
 
-    // Delete branch if requested
-    if (deleteBranch && branchName) {
+      // Delete branch if requested
+      if (deleteBranch && branchName) {
+        try {
+          await git(context.worktree, "branch", "-d", branchName);
+          output += `\n✓ Deleted branch ${branchName}`;
+        } catch (error: any) {
+          output += `\n⚠ Could not delete branch ${branchName}: ${error.message || error}`;
+          output += "\n  (Branch may not be fully merged. Use git branch -D to force delete.)";
+        }
+      }
+
+      // Notify via toast
       try {
-        await git(context.worktree, "branch", "-d", branchName);
-        output += `\n✓ Deleted branch ${branchName}`;
-      } catch (error: any) {
-        output += `\n⚠ Could not delete branch ${branchName}: ${error.message || error}`;
-        output += "\n  (Branch may not be fully merged. Use git branch -D to force delete.)";
+        const closedInfo = closedSession ? " + closed tab" : "";
+        await client.tui.showToast({
+          body: {
+            title: `Worktree: ${name}`,
+            message: branchName
+              ? `Removed worktree${closedInfo} (branch ${branchName} ${deleteBranch ? "deleted" : "kept"})`
+              : `Removed worktree${closedInfo}`,
+            variant: "success",
+            duration: 4000,
+          },
+        });
+      } catch {
+        // Toast failure is non-fatal
       }
-    }
 
-    return output;
-  },
-});
+      return output;
+    },
+  });
+}
 
 export const open = tool({
   description:
@@ -219,48 +333,7 @@ Worktree path: ${absoluteWorktreePath}`;
   },
 });
 
-// ─── Terminal Detection ──────────────────────────────────────────────────────
-
-/**
- * Detect the user's terminal emulator on macOS.
- * Returns "iterm2", "terminal", or "unknown".
- */
-function detectMacTerminal(): "iterm2" | "terminal" | "unknown" {
-  // iTerm2 sets ITERM_SESSION_ID and TERM_PROGRAM
-  if (process.env.ITERM_SESSION_ID || process.env.TERM_PROGRAM === "iTerm.app") {
-    return "iterm2";
-  }
-  if (process.env.TERM_PROGRAM === "Apple_Terminal") {
-    return "terminal";
-  }
-  // Check __CFBundleIdentifier for the running app
-  const bundleId = process.env.__CFBundleIdentifier;
-  if (bundleId?.includes("iterm2") || bundleId?.includes("iTerm")) {
-    return "iterm2";
-  }
-  if (bundleId?.includes("Terminal") || bundleId?.includes("apple.Terminal")) {
-    return "terminal";
-  }
-  return "unknown";
-}
-
-/**
- * Detect the user's terminal emulator on Linux.
- * Returns the terminal name or "unknown".
- */
-function detectLinuxTerminal(): string {
-  const termProgram = process.env.TERM_PROGRAM;
-  if (termProgram) return termProgram.toLowerCase();
-
-  // Check common environment hints
-  if (process.env.KITTY_WINDOW_ID) return "kitty";
-  if (process.env.ALACRITTY_SOCKET) return "alacritty";
-  if (process.env.WEZTERM_PANE) return "wezterm";
-  if (process.env.GNOME_TERMINAL_SERVICE) return "gnome-terminal";
-  if (process.env.KONSOLE_VERSION) return "konsole";
-
-  return "unknown";
-}
+// ─── Terminal detection and tab management now in src/utils/terminal.ts ──────
 
 /**
  * Find the opencode binary path, checking common locations.
@@ -292,111 +365,67 @@ function buildLaunchPrompt(planFilename?: string, customPrompt?: string): string
   return "Check for plans in .cortex/plans/ and begin implementation. If no plan exists, analyze the codebase and suggest next steps.";
 }
 
-// ─── Mode A: New Terminal Tab ────────────────────────────────────────────────
+// ─── Mode A: New Terminal Tab (via driver system) ────────────────────────────
 
 async function launchTerminalTab(
+  client: Client,
   worktreePath: string,
+  branchName: string,
   opencodeBin: string,
   agent: string,
   prompt: string,
 ): Promise<string> {
-  const platform = process.platform;
-
-  // Build a safe display command for manual fallback
-  const innerCmd = `cd "${worktreePath}" && "${opencodeBin}" --agent ${agent} --prompt "${prompt.replace(/"/g, '\\"')}"`;
-
-  if (platform === "darwin") {
-    const terminal = detectMacTerminal();
-
-    // For osascript, we must escape for AppleScript string context
-    const safePath = shellEscape(worktreePath);
-    const safeBin = shellEscape(opencodeBin);
-
-    if (terminal === "iterm2") {
-      const script = `tell application "iTerm2"
-  tell current window
-    create tab with default profile
-    tell current session of current tab
-      write text "cd \\"${safePath}\\" && \\"${safeBin}\\" --agent ${shellEscape(agent)}"
-    end tell
-  end tell
-end tell`;
-      try {
-        await exec("osascript", ["-e", script]);
-        return `✓ Opened new iTerm2 tab in worktree`;
-      } catch {
-        // Fall back to generic open
-      }
-    }
-
-    if (terminal === "terminal" || terminal === "unknown") {
-      const script = `tell application "Terminal"
-  activate
-  do script "cd \\"${safePath}\\" && \\"${safeBin}\\" --agent ${shellEscape(agent)}"
-end tell`;
-      try {
-        await exec("osascript", ["-e", script]);
-        return `✓ Opened new Terminal.app window in worktree`;
-      } catch {
-        // Last resort: use open -a
-        try {
-          await exec("open", ["-a", "Terminal", worktreePath]);
-          return `✓ Opened Terminal.app in worktree directory (run opencode manually)`;
-        } catch {
-          return `✗ Could not open terminal. Manual command:\n  ${innerCmd}`;
-        }
-      }
-    }
-  }
-
-  if (platform === "linux") {
-    const terminal = detectLinuxTerminal();
-
-    // Build a safe inner command for bash -c
-    const bashCmd = `cd "${shellEscape(worktreePath)}" && "${shellEscape(opencodeBin)}" --agent ${shellEscape(agent)}`;
-
-    const launchers: Record<string, string[]> = {
-      "kitty": ["kitty", "--directory", worktreePath, "--", "bash", "-c", bashCmd],
-      "alacritty": ["alacritty", "--working-directory", worktreePath, "-e", "bash", "-c", bashCmd],
-      "wezterm": ["wezterm", "start", "--cwd", worktreePath, "--", "bash", "-c", bashCmd],
-      "gnome-terminal": ["gnome-terminal", "--working-directory", worktreePath, "--", "bash", "-c", bashCmd],
-      "konsole": ["konsole", "--workdir", worktreePath, "-e", "bash", "-c", bashCmd],
-    };
-
-    const args = launchers[terminal];
-    if (args) {
-      try {
-        shellSpawn(args[0], args.slice(1), { cwd: worktreePath });
-        return `✓ Opened ${terminal} in worktree`;
-      } catch {
-        // Fall through to generic attempt
-      }
-    }
-
-    // Generic fallback: try common terminals in order
-    for (const [name, cmdArgs] of Object.entries(launchers)) {
-      try {
-        shellSpawn(cmdArgs[0], cmdArgs.slice(1), { cwd: worktreePath });
-        return `✓ Opened ${name} in worktree`;
-      } catch {
-        continue;
-      }
-    }
-
-    return `✗ Could not detect terminal emulator. Manual command:\n  ${innerCmd}`;
-  }
-
-  if (platform === "win32") {
+  /** Fire a toast notification for terminal launch results. */
+  const notify = async (
+    message: string,
+    variant: "info" | "success" | "warning" | "error" = "success",
+  ) => {
     try {
-      // Use cmd with array args — /k keeps the window open
-      await exec("cmd", ["/k", `cd /d "${shellEscape(worktreePath)}" && "${shellEscape(opencodeBin)}" --agent ${shellEscape(agent)}`]);
-      return `✓ Opened new cmd window in worktree`;
+      await client.tui.showToast({
+        body: {
+          title: `Terminal: ${branchName}`,
+          message,
+          variant,
+          duration: variant === "error" ? 8000 : 4000,
+        },
+      });
     } catch {
-      return `✗ Could not open terminal. Manual command:\n  ${innerCmd}`;
+      // Toast failure is non-fatal
     }
-  }
+  };
 
-  return `✗ Unsupported platform: ${platform}. Manual command:\n  ${innerCmd}`;
+  const driver = detectDriver();
+  const opts: TabOpenOptions = {
+    worktreePath,
+    opencodeBin,
+    agent,
+    prompt,
+    branchName,
+  };
+
+  try {
+    const result = await driver.openTab(opts);
+
+    // Persist session for later cleanup (e.g., worktree_remove)
+    const session: TerminalSession = {
+      terminal: driver.name,
+      platform: process.platform,
+      mode: "terminal",
+      branch: branchName,
+      agent,
+      worktreePath,
+      startedAt: new Date().toISOString(),
+      ...result,
+    };
+    writeSession(worktreePath, session);
+
+    await notify(`Opened ${driver.name} tab with agent '${agent}'`);
+    return `✓ Opened ${driver.name} tab in worktree\n\nBranch: ${branchName}\nTerminal: ${driver.name}`;
+  } catch (error: any) {
+    await notify(`Could not open terminal: ${error.message || error}`, "error");
+    const innerCmd = `cd "${worktreePath}" && "${opencodeBin}" --agent ${agent}`;
+    return `✗ Could not open terminal (${driver.name}). Manual command:\n  ${innerCmd}`;
+  }
 }
 
 // ─── Mode B: In-App PTY ─────────────────────────────────────────────────────
@@ -410,7 +439,7 @@ async function launchPty(
   prompt: string,
 ): Promise<string> {
   try {
-    await client.pty.create({
+    const response = await client.pty.create({
       body: {
         command: opencodeBin,
         args: ["--agent", agent, "--prompt", prompt],
@@ -418,6 +447,37 @@ async function launchPty(
         title: `Worktree: ${branchName}`,
       },
     });
+
+    // Capture PTY ID and PID from response for later cleanup
+    const ptyId = response.data?.id;
+    const ptyPid = response.data?.pid;
+
+    // Persist session for cleanup on worktree_remove
+    writeSession(worktreePath, {
+      terminal: "pty",
+      platform: process.platform,
+      mode: "pty",
+      ptyId: ptyId ?? undefined,
+      pid: ptyPid ?? undefined,
+      branch: branchName,
+      agent,
+      worktreePath,
+      startedAt: new Date().toISOString(),
+    });
+
+    // Show toast for PTY launch
+    try {
+      await client.tui.showToast({
+        body: {
+          title: `PTY: ${branchName}`,
+          message: `Created in-app session with agent '${agent}'`,
+          variant: "success",
+          duration: 4000,
+        },
+      });
+    } catch {
+      // Toast failure is non-fatal
+    }
 
     return `✓ Created in-app PTY session for worktree
 
@@ -427,6 +487,19 @@ Title: "Worktree: ${branchName}"
 The PTY is running OpenCode with agent '${agent}' in the worktree.
 Switch to it using OpenCode's terminal panel.`;
   } catch (error: any) {
+    try {
+      await client.tui.showToast({
+        body: {
+          title: `PTY: ${branchName}`,
+          message: `Failed to create session: ${error.message || error}`,
+          variant: "error",
+          duration: 8000,
+        },
+      });
+    } catch {
+      // Toast failure is non-fatal
+    }
+
     return `✗ Failed to create PTY session: ${error.message || error}
 
 Falling back to manual command:
@@ -459,7 +532,7 @@ async function launchBackground(
     },
   );
 
-  // Save PID for tracking
+  // Save PID for tracking (legacy format)
   const cortexDir = path.join(worktreePath, ".cortex");
   if (!fs.existsSync(cortexDir)) {
     fs.mkdirSync(cortexDir, { recursive: true });
@@ -473,6 +546,18 @@ async function launchBackground(
       startedAt: new Date().toISOString(),
     }),
   );
+
+  // Also write unified terminal session for cleanup on worktree_remove
+  writeSession(worktreePath, {
+    terminal: "background",
+    platform: process.platform,
+    mode: "background",
+    pid: proc.pid ?? undefined,
+    branch: branchName,
+    agent,
+    worktreePath,
+    startedAt: new Date().toISOString(),
+  });
 
   // Show initial toast
   try {
@@ -671,7 +756,9 @@ Install OpenCode or ensure it's in your PATH.`;
       switch (mode) {
         case "terminal":
           launchResult = await launchTerminalTab(
+            client,
             absoluteWorktreePath,
+            branchName,
             opencodeBin,
             agent,
             launchPrompt,

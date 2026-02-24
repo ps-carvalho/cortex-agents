@@ -26,17 +26,17 @@ export const CortexPlugin: Plugin = async (ctx) => {
       // Cortex tools - .cortex directory management
       cortex_init: cortex.init,
       cortex_status: cortex.status,
+      cortex_configure: cortex.configure,
 
-      // Worktree tools - git worktree management
-      worktree_create: worktree.create,
+      // Worktree tools - git worktree management (factories for toast notifications)
+      worktree_create: worktree.createCreate(ctx.client),
       worktree_list: worktree.list,
-      worktree_remove: worktree.remove,
+      worktree_remove: worktree.createRemove(ctx.client),
       worktree_open: worktree.open,
-      // Dynamic tool: needs client + shell via factory (closure injection)
       worktree_launch: worktree.createLaunch(ctx.client, ctx.$),
 
-      // Branch tools - git branch operations
-      branch_create: branch.create,
+      // Branch tools - git branch operations (factory for toast notifications)
+      branch_create: branch.createCreate(ctx.client),
       branch_status: branch.status,
       branch_switch: branch.switch_,
 

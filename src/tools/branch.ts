@@ -1,55 +1,91 @@
 import { tool } from "@opencode-ai/plugin";
+import type { PluginInput } from "@opencode-ai/plugin";
 import { git } from "../utils/shell.js";
 
 const PROTECTED_BRANCHES = ["main", "master", "develop", "production", "staging"];
 
-export const create = tool({
-  description:
-    "Create and checkout a new git branch with proper naming convention",
-  args: {
-    name: tool.schema
-      .string()
-      .describe("Branch name slug (e.g., 'user-authentication', 'fix-login')"),
-    type: tool.schema
-      .enum(["feature", "bugfix", "hotfix", "refactor", "docs", "test", "chore"])
-      .describe("Branch type - determines prefix"),
-  },
-  async execute(args, context) {
-    const { name, type } = args;
-    const branchName = `${type}/${name}`;
+// Extract client type from the plugin input via inference
+type Client = PluginInput["client"];
 
-    // Check if we're in a git repository
-    try {
-      await git(context.worktree, "rev-parse", "--git-dir");
-    } catch {
-      return "✗ Error: Not in a git repository";
-    }
+/**
+ * Factory function that creates the branch_create tool with access
+ * to the OpenCode client for toast notifications.
+ */
+export function createCreate(client: Client) {
+  return tool({
+    description:
+      "Create and checkout a new git branch with proper naming convention",
+    args: {
+      name: tool.schema
+        .string()
+        .describe("Branch name slug (e.g., 'user-authentication', 'fix-login')"),
+      type: tool.schema
+        .enum(["feature", "bugfix", "hotfix", "refactor", "docs", "test", "chore"])
+        .describe("Branch type - determines prefix"),
+    },
+    async execute(args, context) {
+      const { name, type } = args;
+      const branchName = `${type}/${name}`;
 
-    // Check if branch already exists
-    try {
-      const { stdout } = await git(context.worktree, "branch", "--list", branchName);
-      if (stdout.trim()) {
-        return `✗ Error: Branch '${branchName}' already exists.
+      // Check if we're in a git repository
+      try {
+        await git(context.worktree, "rev-parse", "--git-dir");
+      } catch {
+        return "✗ Error: Not in a git repository";
+      }
+
+      // Check if branch already exists
+      try {
+        const { stdout } = await git(context.worktree, "branch", "--list", branchName);
+        if (stdout.trim()) {
+          return `✗ Error: Branch '${branchName}' already exists.
 
 Use branch_switch to switch to it, or choose a different name.`;
+        }
+      } catch {
+        // Ignore error, branch check is optional
       }
-    } catch {
-      // Ignore error, branch check is optional
-    }
 
-    // Create and checkout the branch
-    try {
-      await git(context.worktree, "checkout", "-b", branchName);
-    } catch (error: any) {
-      return `✗ Error creating branch: ${error.message || error}`;
-    }
+      // Create and checkout the branch
+      try {
+        await git(context.worktree, "checkout", "-b", branchName);
+      } catch (error: any) {
+        try {
+          await client.tui.showToast({
+            body: {
+              title: `Branch: ${branchName}`,
+              message: `Failed to create: ${error.message || error}`,
+              variant: "error",
+              duration: 8000,
+            },
+          });
+        } catch {
+          // Toast failure is non-fatal
+        }
+        return `✗ Error creating branch: ${error.message || error}`;
+      }
 
-    return `✓ Created and switched to branch: ${branchName}
+      // Notify via toast
+      try {
+        await client.tui.showToast({
+          body: {
+            title: `Branch: ${branchName}`,
+            message: `Created and checked out`,
+            variant: "success",
+            duration: 4000,
+          },
+        });
+      } catch {
+        // Toast failure is non-fatal
+      }
+
+      return `✓ Created and switched to branch: ${branchName}
 
 You are now on branch '${branchName}'.
 Make your changes and commit when ready.`;
-  },
-});
+    },
+  });
+}
 
 export const status = tool({
   description:

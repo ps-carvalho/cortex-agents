@@ -112,6 +112,31 @@ export async function which(bin: string): Promise<string | null> {
 }
 
 /**
+ * Send a signal to a process. Returns true if signal was sent, false if
+ * the process doesn't exist or we lack permissions.
+ */
+export function kill(pid: number, signal: NodeJS.Signals = "SIGTERM"): boolean {
+  try {
+    process.kill(pid, signal);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Check if a process is alive (sends signal 0 — no actual signal).
+ */
+export function isAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Escape a string for safe inclusion in a shell command.
  * Use only when array-based argument passing is impossible (e.g., osascript).
  */

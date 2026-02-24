@@ -12,7 +12,7 @@ import {
   getSubagentChoices,
 } from "./registry.js";
 
-const VERSION = "2.2.0";
+const VERSION = "2.3.0";
 const PLUGIN_NAME = "cortex-agents";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -33,6 +33,13 @@ interface OpencodeConfig {
   plugin?: string[];
   agent?: { [key: string]: AgentConfig | undefined };
   [key: string]: unknown;
+}
+
+/** Per-project model config stored in .opencode/models.json */
+interface ProjectModelsConfig {
+  primary: { model: string };
+  subagent: { model: string };
+  agents: { [key: string]: { model: string } };
 }
 
 // ─── Config Helpers ──────────────────────────────────────────────────────────
@@ -65,6 +72,75 @@ function readConfig(configPath: string): OpencodeConfig {
 function writeConfig(configPath: string, config: OpencodeConfig): void {
   fs.mkdirSync(path.dirname(configPath), { recursive: true });
   fs.writeFileSync(configPath, JSON.stringify(config, null, 2) + "\n");
+}
+
+// ─── Per-Project Model Config (.opencode/models.json) ───────────────────────
+
+const PROJECT_MODELS_FILE = "models.json";
+
+function getProjectModelsPath(): string {
+  return path.join(process.cwd(), ".opencode", PROJECT_MODELS_FILE);
+}
+
+function hasProjectModelsConfig(): boolean {
+  return fs.existsSync(getProjectModelsPath());
+}
+
+function readProjectModels(): ProjectModelsConfig | null {
+  const modelsPath = getProjectModelsPath();
+  if (!fs.existsSync(modelsPath)) return null;
+  try {
+    return JSON.parse(fs.readFileSync(modelsPath, "utf-8"));
+  } catch {
+    return null;
+  }
+}
+
+function writeProjectModels(primary: string, subagent: string): void {
+  const modelsPath = getProjectModelsPath();
+  const dir = path.dirname(modelsPath);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+
+  const config: ProjectModelsConfig = {
+    primary: { model: primary },
+    subagent: { model: subagent },
+    agents: {},
+  };
+
+  for (const name of PRIMARY_AGENTS) {
+    config.agents[name] = { model: primary };
+  }
+  for (const name of SUBAGENTS) {
+    config.agents[name] = { model: subagent };
+  }
+
+  fs.writeFileSync(modelsPath, JSON.stringify(config, null, 2) + "\n");
+}
+
+/**
+ * Sync .opencode/models.json → local opencode.json agent model settings.
+ * Creates or merges into local opencode.json at project root.
+ */
+function syncProjectModelsToConfig(): boolean {
+  const models = readProjectModels();
+  if (!models) return false;
+
+  const localPath = path.join(process.cwd(), "opencode.json");
+  const config: OpencodeConfig = fs.existsSync(localPath)
+    ? readConfig(localPath)
+    : { $schema: "https://opencode.ai/config.json" };
+
+  if (!config.agent) config.agent = {};
+
+  for (const [name, entry] of Object.entries(models.agents)) {
+    if (!config.agent[name]) config.agent[name] = {};
+    config.agent[name]!.model = entry.model;
+  }
+
+  writeConfig(localPath, config);
+  return true;
 }
 
 // ─── File Copy Helpers ───────────────────────────────────────────────────────
@@ -178,8 +254,17 @@ function install(): void {
   console.log("Installing agents and skills...");
   installAgentsAndSkills(globalDir);
 
+  // Sync per-project models if .opencode/models.json exists
+  if (hasProjectModelsConfig()) {
+    console.log("\nPer-project model config found (.opencode/models.json)");
+    if (syncProjectModelsToConfig()) {
+      console.log("  Synced model settings to local opencode.json");
+    }
+  }
+
   console.log("\nDone! Next steps:");
-  console.log(`  1. Run 'npx ${PLUGIN_NAME} configure' to select your models`);
+  console.log(`  1. Run 'npx ${PLUGIN_NAME} configure' to select your models (global)`);
+  console.log(`     Or 'npx ${PLUGIN_NAME} configure --project' for per-project config`);
   console.log("  2. Restart OpenCode to load the plugin\n");
 }
 
@@ -230,21 +315,38 @@ function uninstall(): void {
 async function configure(): Promise<void> {
   const args = process.argv.slice(3);
   const isReset = args.includes("--reset");
+  const isProject = args.includes("--project");
 
   // Handle --reset flag
   if (isReset) {
-    return configureReset();
+    return configureReset(isProject);
   }
 
-  console.log(`\n🔧 Cortex Agents — Model Configuration\n`);
+  const scope = isProject ? "Per-Project" : "Global";
+  console.log(`\n🔧 Cortex Agents — ${scope} Model Configuration\n`);
 
-  // Ensure plugin is installed first
+  if (isProject) {
+    const opencodeDir = path.join(process.cwd(), ".opencode");
+    if (!fs.existsSync(opencodeDir)) {
+      console.log(
+        `⚠  No .opencode/ directory found in ${process.cwd()}.`
+      );
+      console.log(
+        `   Run 'npx ${PLUGIN_NAME} install' first, or use 'configure' without --project for global config.\n`
+      );
+      process.exit(1);
+    }
+    console.log(`Project: ${process.cwd()}`);
+    console.log(`Config:  .opencode/models.json + opencode.json\n`);
+  }
+
+  // Ensure plugin is installed first (for global mode)
   const configInfo = findOpencodeConfig();
   const config = configInfo
     ? readConfig(configInfo.path)
     : { $schema: "https://opencode.ai/config.json" as const };
 
-  if (!config.plugin?.includes(PLUGIN_NAME)) {
+  if (!isProject && !config.plugin?.includes(PLUGIN_NAME)) {
     console.log(
       `⚠  Plugin not installed. Adding '${PLUGIN_NAME}' to config first.\n`
     );
@@ -253,6 +355,64 @@ async function configure(): Promise<void> {
   }
 
   // ── Primary model selection ────────────────────────────────
+  const { primary, subagent } = await promptModelSelection();
+
+  // ── Write config ───────────────────────────────────────────
+  if (isProject) {
+    // Per-project: write .opencode/models.json + sync to local opencode.json
+    writeProjectModels(primary, subagent);
+    syncProjectModelsToConfig();
+
+    const modelsPath = getProjectModelsPath();
+    const localConfigPath = path.join(process.cwd(), "opencode.json");
+
+    console.log("━".repeat(50));
+    console.log(`✓ Per-project config saved:\n`);
+    console.log(`  Models:  ${modelsPath}`);
+    console.log(`  Runtime: ${localConfigPath}\n`);
+  } else {
+    // Global: write to opencode.json (existing behavior)
+    if (!config.agent) config.agent = {};
+
+    for (const name of PRIMARY_AGENTS) {
+      if (!config.agent[name]) config.agent[name] = {};
+      config.agent[name]!.model = primary;
+    }
+
+    for (const name of SUBAGENTS) {
+      if (!config.agent[name]) config.agent[name] = {};
+      config.agent[name]!.model = subagent;
+    }
+
+    const targetPath =
+      configInfo?.path || path.join(getGlobalDir(), "opencode.json");
+    writeConfig(targetPath, config);
+
+    console.log("━".repeat(50));
+    console.log(`✓ Configuration saved to ${targetPath}\n`);
+  }
+
+  console.log("  Primary agents:");
+  for (const name of PRIMARY_AGENTS) {
+    console.log(`    ${name.padEnd(10)} → ${primary}`);
+  }
+
+  console.log("\n  Subagents:");
+  for (const name of SUBAGENTS) {
+    console.log(`    ${name.padEnd(10)} → ${subagent}`);
+  }
+
+  console.log("\nRestart OpenCode to apply changes.\n");
+}
+
+/**
+ * Interactive prompt for primary + subagent model selection.
+ * Shared between global and per-project configure flows.
+ */
+async function promptModelSelection(): Promise<{
+  primary: string;
+  subagent: string;
+}> {
   const primaryChoices = getPrimaryChoices();
   primaryChoices.push({
     title: "Enter custom model ID",
@@ -272,7 +432,6 @@ async function configure(): Promise<void> {
     hint: "Use arrow keys, Enter to confirm",
   });
 
-  // User cancelled (Ctrl+C)
   if (primaryModel === undefined) {
     console.log("\nConfiguration cancelled.\n");
     process.exit(0);
@@ -339,43 +498,61 @@ async function configure(): Promise<void> {
 
   console.log(`✓ Subagent model: ${subagent}\n`);
 
-  // ── Write to opencode.json ─────────────────────────────────
-  if (!config.agent) config.agent = {};
-
-  for (const name of PRIMARY_AGENTS) {
-    if (!config.agent[name]) config.agent[name] = {};
-    config.agent[name]!.model = primary;
-  }
-
-  for (const name of SUBAGENTS) {
-    if (!config.agent[name]) config.agent[name] = {};
-    config.agent[name]!.model = subagent;
-  }
-
-  const targetPath =
-    configInfo?.path || path.join(getGlobalDir(), "opencode.json");
-  writeConfig(targetPath, config);
-
-  // ── Print summary ──────────────────────────────────────────
-  console.log("━".repeat(50));
-  console.log(`✓ Configuration saved to ${targetPath}\n`);
-
-  console.log("  Primary agents:");
-  for (const name of PRIMARY_AGENTS) {
-    console.log(`    ${name.padEnd(10)} → ${primary}`);
-  }
-
-  console.log("\n  Subagents:");
-  for (const name of SUBAGENTS) {
-    console.log(`    ${name.padEnd(10)} → ${subagent}`);
-  }
-
-  console.log("\nRestart OpenCode to apply changes.\n");
+  return { primary, subagent };
 }
 
-function configureReset(): void {
-  console.log(`\n🔧 Cortex Agents — Reset Model Configuration\n`);
+function configureReset(isProject: boolean = false): void {
+  const scope = isProject ? "Per-Project" : "Global";
+  console.log(`\n🔧 Cortex Agents — Reset ${scope} Model Configuration\n`);
 
+  if (isProject) {
+    // Reset per-project config
+    const modelsPath = getProjectModelsPath();
+    let removedModels = false;
+
+    if (fs.existsSync(modelsPath)) {
+      fs.unlinkSync(modelsPath);
+      console.log(`✓ Removed ${modelsPath}`);
+      removedModels = true;
+    }
+
+    // Also clean agent models from local opencode.json
+    const localConfigPath = path.join(process.cwd(), "opencode.json");
+    if (fs.existsSync(localConfigPath)) {
+      const config = readConfig(localConfigPath);
+      if (config.agent) {
+        let resetCount = 0;
+        for (const name of ALL_AGENTS) {
+          if (config.agent[name]?.model) {
+            delete config.agent[name]!.model;
+            resetCount++;
+            if (Object.keys(config.agent[name]!).length === 0) {
+              delete config.agent[name];
+            }
+          }
+        }
+        if (Object.keys(config.agent).length === 0) {
+          delete config.agent;
+        }
+        if (resetCount > 0) {
+          writeConfig(localConfigPath, config);
+          console.log(`✓ Removed ${resetCount} agent model entries from ${localConfigPath}`);
+          removedModels = true;
+        }
+      }
+    }
+
+    if (!removedModels) {
+      console.log("No per-project model configuration found. Nothing to reset.\n");
+      return;
+    }
+
+    console.log("\nAgents will now fall back to global or OpenCode default models.");
+    console.log("Restart OpenCode to apply changes.\n");
+    return;
+  }
+
+  // Global reset (existing behavior)
   const configInfo = findOpencodeConfig();
   if (!configInfo) {
     console.log("No OpenCode config found. Nothing to reset.\n");
@@ -453,7 +630,15 @@ function status(): void {
   console.log(`\nAgents installed: ${agentCount}`);
   console.log(`Skills installed: ${skillCount}`);
 
-  // Show model configuration
+  // Show per-project model configuration
+  const projectModels = readProjectModels();
+  if (projectModels) {
+    console.log("\nPer-Project Models (.opencode/models.json):");
+    console.log(`  Primary agents:  ${projectModels.primary.model}`);
+    console.log(`  Subagents:       ${projectModels.subagent.model}`);
+  }
+
+  // Show global/active model configuration
   if (config.agent) {
     const primaryModels = PRIMARY_AGENTS.map(
       (n) => config.agent?.[n]?.model
@@ -463,7 +648,8 @@ function status(): void {
     ).filter(Boolean);
 
     if (primaryModels.length > 0 || subagentModels.length > 0) {
-      console.log("\nModel Configuration:");
+      const source = projectModels ? "Active" : "Global";
+      console.log(`\n${source} Model Configuration (opencode.json):`);
 
       if (primaryModels.length > 0) {
         const unique = [...new Set(primaryModels)];
@@ -478,16 +664,22 @@ function status(): void {
           `  Subagents:       ${unique.join(", ")}`
         );
       }
-    } else {
+    } else if (!projectModels) {
       console.log("\nModels: Not configured (using OpenCode defaults)");
       console.log(
-        `  Run 'npx ${PLUGIN_NAME} configure' to select models.`
+        `  Run 'npx ${PLUGIN_NAME} configure' for global config`
+      );
+      console.log(
+        `  Run 'npx ${PLUGIN_NAME} configure --project' for per-project config`
       );
     }
-  } else {
+  } else if (!projectModels) {
     console.log("\nModels: Not configured (using OpenCode defaults)");
     console.log(
-      `  Run 'npx ${PLUGIN_NAME} configure' to select models.`
+      `  Run 'npx ${PLUGIN_NAME} configure' for global config`
+    );
+    console.log(
+      `  Run 'npx ${PLUGIN_NAME} configure --project' for per-project config`
     );
   }
 
@@ -508,17 +700,21 @@ USAGE:
 
 COMMANDS:
   install              Install plugin, agents, and skills into OpenCode config
-  configure            Interactive model selection for all agents
+  configure            Interactive model selection (global)
+  configure --project  Interactive model selection (per-project, saves to .opencode/)
   configure --reset    Reset model configuration to OpenCode defaults
+  configure --project --reset  Reset per-project model configuration
   uninstall            Remove plugin, agents, skills, and model config
   status               Show installation and model configuration status
   help                 Show this help message
 
 EXAMPLES:
-  npx ${PLUGIN_NAME} install           # Install plugin
-  npx ${PLUGIN_NAME} configure         # Select models interactively
-  npx ${PLUGIN_NAME} configure --reset # Reset to default models
-  npx ${PLUGIN_NAME} status            # Check status
+  npx ${PLUGIN_NAME} install                    # Install plugin
+  npx ${PLUGIN_NAME} configure                  # Global model selection
+  npx ${PLUGIN_NAME} configure --project        # Per-project models (.opencode/models.json)
+  npx ${PLUGIN_NAME} configure --reset          # Reset global models
+  npx ${PLUGIN_NAME} configure --project --reset # Reset per-project models
+  npx ${PLUGIN_NAME} status                     # Check status
 
 AGENTS:
   Primary (build, plan, debug):
@@ -527,8 +723,9 @@ AGENTS:
   Subagents (fullstack, testing, security, devops):
     Handle focused tasks — a fast/cheap model works great.
 
-TOOLS (22):
+TOOLS (23):
   cortex_init, cortex_status      .cortex directory management
+  cortex_configure                Per-project model configuration
   worktree_create, worktree_list  Git worktree management
   worktree_remove, worktree_open
   worktree_launch                 Launch worktree (terminal/PTY/background)
