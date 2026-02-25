@@ -1,9 +1,11 @@
 {
-  "terminal": "fallback",
+  "terminal": "pty",
   "platform": "darwin",
-  "mode": "terminal",
-  "branch": "feature/disable-native-agents",
+  "mode": "pty",
+  "ptyId": "pty_c9638ddd0001Th5XvhmwzpdjH3",
+  "pid": 73804,
+  "branch": "bugfix/terminal-tab-detection",
   "agent": "implement",
-  "worktreePath": "/Users/paulo/Code/cortex-agents/.worktrees/disable-native-agents",
-  "startedAt": "2026-02-25T17:13:09.602Z"
+  "worktreePath": "/Users/paulo/Code/cortex-agents/.worktrees/terminal-tab-detection",
+  "startedAt": "2026-02-25T19:13:55.185Z"
 }
