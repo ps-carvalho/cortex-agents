@@ -14,7 +14,7 @@ import {
   getSubagentChoices,
 } from "./registry.js";
 
-const VERSION = "3.3.0";
+const VERSION = "3.4.0";
 const PLUGIN_NAME = "cortex-agents";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -802,7 +802,7 @@ AGENTS:
   Subagents (crosslayer, qa, guard, ship):
     Handle focused tasks — a fast/cheap model works great.
 
-TOOLS (25):
+TOOLS (32):
   cortex_init, cortex_status      .cortex directory management
   cortex_configure                Per-project model configuration
   worktree_create, worktree_list  Git worktree management
@@ -819,13 +819,17 @@ TOOLS (25):
   docs_init, docs_save            Mermaid documentation
   docs_list, docs_index
   task_finalize                   Commit, push, and create PR
+  github_status, github_issues    GitHub issue and project browsing
+  github_projects
+  repl_init, repl_status          Iterative task-by-task implementation loop
+  repl_report, repl_summary
 
 SKILLS (14):
-  web-development, frontend-development, backend-development,
-  mobile-development, desktop-development, database-design,
-  api-design, architecture-patterns, design-patterns,
-  testing-strategies, security-hardening, deployment-automation,
-  performance-optimization, code-quality, git-workflow
+  frontend-development, backend-development, mobile-development,
+  desktop-development, database-design, api-design,
+  architecture-patterns, design-patterns, testing-strategies,
+  security-hardening, deployment-automation, performance-optimization,
+  code-quality, git-workflow
 `);
 }
 
