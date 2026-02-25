@@ -9,6 +9,7 @@ import * as session from "./tools/session";
 import * as docs from "./tools/docs";
 import * as task from "./tools/task";
 import * as environment from "./tools/environment";
+import * as github from "./tools/github";
 
 // ─── Agent Descriptions (for handover toasts) ───────────────────────────────
 
@@ -113,6 +114,16 @@ const TOOL_NOTIFICATIONS: Record<string, ToolNotificationConfig> = {
         .split("\n")[0]
         .substring(0, 100),
   },
+  github_status: {
+    successTitle: "GitHub Connected",
+    successMsg: () => "Repository detected with gh CLI",
+    errorTitle: "GitHub Not Available",
+    errorMsg: (_, out) =>
+      out
+        .replace(/^✗\s*/, "")
+        .split("\n")[0]
+        .substring(0, 100),
+  },
 };
 
 // ─── Error Message Extraction ────────────────────────────────────────────────
@@ -190,6 +201,11 @@ export const CortexPlugin: Plugin = async (ctx) => {
       // Environment tools - IDE/terminal detection for contextual options
       detect_environment: environment.detectEnvironment,
       get_environment_info: environment.getEnvironmentInfo,
+
+      // GitHub integration tools - work item listing, issue selection, project boards
+      github_status: github.status,
+      github_issues: github.issues,
+      github_projects: github.projects,
     },
 
     // ── Post-execution toast notifications ────────────────────────────────

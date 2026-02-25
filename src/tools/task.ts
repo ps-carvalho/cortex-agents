@@ -5,6 +5,7 @@ import { detectWorktreeInfo } from "../utils/worktree-detect.js";
 import {
   findPlanContent,
   extractPlanSections,
+  extractIssueRefs,
   buildPrBodyFromPlan,
 } from "../utils/plan-extract.js";
 import { git, gh, which } from "../utils/shell.js";
@@ -135,6 +136,10 @@ export const finalize = tool({
       .boolean()
       .optional()
       .describe("Create as draft PR (default: false)"),
+    issueRefs: tool.schema
+      .array(tool.schema.number())
+      .optional()
+      .describe("GitHub issue numbers to link in PR body (adds 'Closes #N' for each)"),
   },
   async execute(args, context) {
     const {
@@ -144,6 +149,7 @@ export const finalize = tool({
       baseBranch: customBaseBranch,
       planFilename,
       draft = false,
+      issueRefs: explicitIssueRefs,
     } = args;
 
     const cwd = context.worktree;
@@ -253,6 +259,7 @@ All previous steps succeeded (changes committed). Try pushing manually:
 
     // ── 9. Build PR body ──────────────────────────────────────
     let prBodyContent = customPrBody || "";
+    let issueRefs: number[] = explicitIssueRefs ?? [];
 
     if (!prBodyContent) {
       // Try to build from plan
@@ -261,6 +268,11 @@ All previous steps succeeded (changes committed). Try pushing manually:
         const sections = extractPlanSections(plan.content, plan.filename);
         prBodyContent = buildPrBodyFromPlan(sections);
         output.push(`PR body generated from plan: ${plan.filename}`);
+
+        // Extract issue refs from plan frontmatter if not explicitly provided
+        if (issueRefs.length === 0) {
+          issueRefs = extractIssueRefs(plan.content);
+        }
       } else {
         // Fall back to commit log
         const commitLog = await getCommitLog(cwd, baseBranch);
@@ -270,6 +282,13 @@ All previous steps succeeded (changes committed). Try pushing manually:
           prBodyContent = `Implementation on branch \`${branchName}\``;
         }
       }
+    }
+
+    // Append issue closing references to PR body
+    if (issueRefs.length > 0) {
+      const closingRefs = issueRefs.map((n) => `Closes #${n}`).join("\n");
+      prBodyContent += `\n\n## Linked Issues\n\n${closingRefs}`;
+      output.push(`Linked issues: ${issueRefs.map((n) => `#${n}`).join(", ")}`);
     }
 
     // ── 10. Create PR via gh ──────────────────────────────────
