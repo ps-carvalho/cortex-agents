@@ -133,6 +133,22 @@ export const SUBAGENTS = ["crosslayer", "qa", "guard", "ship"] as const;
 /** All agent names combined */
 export const ALL_AGENTS = [...PRIMARY_AGENTS, ...SUBAGENTS] as const;
 
+/** OpenCode built-in agents disabled when cortex-agents is installed.
+ *  Replaced by cortex equivalents: build → implement, plan → architect */
+export const DISABLED_BUILTIN_AGENTS = ["build", "plan"] as const;
+
+/** Old agent files to clean up from previous cortex-agents versions */
+export const STALE_AGENT_FILES = [
+  "build.md",
+  "plan.md",
+  "debug.md",
+  "review.md",
+  "fullstack.md",
+  "testing.md",
+  "security.md",
+  "devops.md",
+] as const;
+
 /**
  * Build the interactive choices list for primary model selection.
  * Shows premium and standard tier models (excluding fast).

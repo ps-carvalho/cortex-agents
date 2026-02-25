@@ -1,0 +1,9 @@
+{
+  "terminal": "fallback",
+  "platform": "darwin",
+  "mode": "terminal",
+  "branch": "feature/disable-native-agents",
+  "agent": "implement",
+  "worktreePath": "/Users/paulo/Code/cortex-agents/.worktrees/disable-native-agents",
+  "startedAt": "2026-02-25T17:13:09.602Z"
+}

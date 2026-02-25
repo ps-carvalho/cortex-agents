@@ -4,6 +4,8 @@ import {
   PRIMARY_AGENTS,
   SUBAGENTS,
   ALL_AGENTS,
+  DISABLED_BUILTIN_AGENTS,
+  STALE_AGENT_FILES,
   getPrimaryChoices,
   getSubagentChoices,
 } from "../registry.js";
@@ -117,6 +119,50 @@ describe("MODEL_REGISTRY", () => {
     const ids = MODEL_REGISTRY.map((m) => m.id);
     const uniqueIds = new Set(ids);
     expect(uniqueIds.size).toBe(ids.length);
+  });
+});
+
+describe("DISABLED_BUILTIN_AGENTS", () => {
+  it("contains the correct built-in agent names to disable", () => {
+    expect(DISABLED_BUILTIN_AGENTS).toEqual(["build", "plan"]);
+  });
+
+  it("has 2 disabled agents", () => {
+    expect(DISABLED_BUILTIN_AGENTS).toHaveLength(2);
+  });
+
+  it("has no overlap with cortex agent names", () => {
+    const disabledSet = new Set<string>(DISABLED_BUILTIN_AGENTS);
+    for (const agent of ALL_AGENTS) {
+      expect(disabledSet.has(agent)).toBe(false);
+    }
+  });
+
+  it("is a readonly tuple", () => {
+    expect(Array.isArray(DISABLED_BUILTIN_AGENTS)).toBe(true);
+  });
+});
+
+describe("STALE_AGENT_FILES", () => {
+  it("contains old agent filenames for cleanup", () => {
+    expect(STALE_AGENT_FILES).toContain("build.md");
+    expect(STALE_AGENT_FILES).toContain("plan.md");
+    expect(STALE_AGENT_FILES).toContain("debug.md");
+    expect(STALE_AGENT_FILES).toContain("review.md");
+  });
+
+  it("has 8 stale files", () => {
+    expect(STALE_AGENT_FILES).toHaveLength(8);
+  });
+
+  it("all entries have .md extension", () => {
+    for (const file of STALE_AGENT_FILES) {
+      expect(file).toMatch(/\.md$/);
+    }
+  });
+
+  it("is a readonly tuple", () => {
+    expect(Array.isArray(STALE_AGENT_FILES)).toBe(true);
   });
 });
 
