@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   extractPlanSections,
+  extractIssueRefs,
   buildPrBodyFromPlan,
   findPlanContent,
 } from "../plan-extract.js";
@@ -71,6 +72,108 @@ A summary here.
     const sections = extractPlanSections(content, "no-sections.md");
     expect(sections.title).toBe("");
     expect(sections.summary).toBe("");
+  });
+});
+
+describe("extractIssueRefs", () => {
+  it("extracts multiple issue numbers from frontmatter", () => {
+    const content = `---
+title: "Auth System"
+type: feature
+issues: [42, 51]
+---
+
+# Auth System
+`;
+    const refs = extractIssueRefs(content);
+    expect(refs).toEqual([42, 51]);
+  });
+
+  it("extracts a single issue number", () => {
+    const content = `---
+title: "Fix Bug"
+issues: [42]
+---
+
+# Fix Bug
+`;
+    const refs = extractIssueRefs(content);
+    expect(refs).toEqual([42]);
+  });
+
+  it("returns empty array when no issues field in frontmatter", () => {
+    const content = `---
+title: "No Issues"
+type: feature
+---
+
+# No Issues
+`;
+    const refs = extractIssueRefs(content);
+    expect(refs).toEqual([]);
+  });
+
+  it("returns empty array when no frontmatter at all", () => {
+    const content = `# Just a Plan
+
+Some content without frontmatter.
+`;
+    const refs = extractIssueRefs(content);
+    expect(refs).toEqual([]);
+  });
+
+  it("returns empty array for empty issues array", () => {
+    const content = `---
+title: "Empty Issues"
+issues: []
+---
+
+# Empty Issues
+`;
+    const refs = extractIssueRefs(content);
+    expect(refs).toEqual([]);
+  });
+
+  it("filters out invalid (non-positive) numbers", () => {
+    const content = `---
+title: "Mixed"
+issues: [42, -1, 0, abc, 51]
+---
+
+# Mixed
+`;
+    const refs = extractIssueRefs(content);
+    // -1 and 0 are filtered (not > 0), "abc" becomes NaN and is filtered
+    expect(refs).toEqual([42, 51]);
+  });
+
+  it("handles issues with extra whitespace", () => {
+    const content = `---
+title: "Spaced"
+issues: [ 42 , 51 , 99 ]
+---
+
+# Spaced
+`;
+    const refs = extractIssueRefs(content);
+    expect(refs).toEqual([42, 51, 99]);
+  });
+
+  it("returns empty array for empty string", () => {
+    expect(extractIssueRefs("")).toEqual([]);
+  });
+
+  it("ignores issues field outside frontmatter", () => {
+    const content = `---
+title: "Plan"
+---
+
+issues: [42, 51]
+
+Some content.
+`;
+    const refs = extractIssueRefs(content);
+    expect(refs).toEqual([]);
   });
 });
 

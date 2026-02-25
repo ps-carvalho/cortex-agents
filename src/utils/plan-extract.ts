@@ -21,6 +21,26 @@ export interface PlanSections {
 }
 
 /**
+ * Extract GitHub issue references from plan frontmatter.
+ *
+ * Looks for `issues: [42, 51]` in YAML frontmatter.
+ * Returns an array of issue numbers, or an empty array if none found.
+ */
+export function extractIssueRefs(planContent: string): number[] {
+  const frontmatterMatch = planContent.match(/^---\n([\s\S]*?)\n---/);
+  if (!frontmatterMatch) return [];
+
+  // Match issues: [42, 51] or issues: [42]
+  const issuesMatch = frontmatterMatch[1].match(/issues:\s*\[([^\]]*)\]/);
+  if (!issuesMatch) return [];
+
+  return issuesMatch[1]
+    .split(",")
+    .map((s) => parseInt(s.trim(), 10))
+    .filter((n) => !isNaN(n) && n > 0);
+}
+
+/**
  * Extract relevant sections from a plan markdown file for composing a PR body.
  *
  * Parses the plan looking for ## Summary, ## Tasks, and ## Key Decisions sections.
@@ -145,7 +165,12 @@ export function findPlanContent(
   if (!fs.existsSync(plansDir)) return null;
 
   if (planFilename) {
-    const filepath = path.join(plansDir, planFilename);
+    // Prevent path traversal — resolve and verify the path stays within plansDir
+    const filepath = path.resolve(plansDir, planFilename);
+    const resolvedPlansDir = path.resolve(plansDir);
+    if (!filepath.startsWith(resolvedPlansDir + path.sep) && filepath !== resolvedPlansDir) {
+      return null; // Reject traversal attempts
+    }
     if (fs.existsSync(filepath)) {
       return { content: fs.readFileSync(filepath, "utf-8"), filename: planFilename };
     }

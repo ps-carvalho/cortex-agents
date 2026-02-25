@@ -29,6 +29,9 @@ tools:
   docs_index: true
   task_finalize: true
   detect_environment: true
+  github_status: true
+  github_issues: true
+  github_projects: true
 permission:
   edit: allow
   bash:
@@ -214,6 +217,7 @@ If the user selects finalize:
    - `commitMessage` in conventional format (e.g., `feat: add worktree launch workflow`)
    - `planFilename` if a plan was loaded in Step 3 (auto-populates PR body)
    - `prBody` should include the quality gate summary from Step 7
+   - `issueRefs` if the plan has linked GitHub issues (extracted from plan frontmatter `issues: [42, 51]`). This auto-appends "Closes #N" to the PR body for each referenced issue.
    - `draft: true` if draft PR was selected
 2. The tool automatically:
    - Stages all changes (`git add -A`)
@@ -294,6 +298,9 @@ Load **multiple skills** if the task spans domains (e.g., fullstack feature → 
 - `docs_save` - Save documentation with mermaid diagrams
 - `docs_list` - Browse existing project documentation
 - `docs_index` - Rebuild documentation index
+- `github_status` - Check GitHub CLI availability and repo connection
+- `github_issues` - List GitHub issues (for verifying linked issues during implementation)
+- `github_projects` - List GitHub Project board items
 - `skill` - Load relevant skills for complex tasks
 
 ## Sub-Agent Orchestration
