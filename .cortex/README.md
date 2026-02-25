@@ -1,6 +1,6 @@
 # .cortex
 
-This directory contains project context for the K2P5 development agents.
+This directory contains project context for the Cortex development agents.
 
 ## Structure
 
@@ -23,7 +23,7 @@ They are gitignored by default but can be kept if needed.
 
 ## Usage
 
-The K2P5 agents will automatically use this directory for:
+The Cortex agents will automatically use this directory for:
 - Saving implementation plans before coding
 - Recording session summaries with key decisions
 - Managing worktree and branch workflows

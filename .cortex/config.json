@@ -1,8 +1,7 @@
 {
-  "$schema": "https://k2p5.dev/cortex-config.json",
   "version": "1.0.0",
   "worktree": {
-    "root": "../.worktrees",
+    "root": ".worktrees",
     "autoCleanup": false
   },
   "branches": {

@@ -184,14 +184,14 @@ Plans: ${planCount}`;
 /**
  * cortex_configure — Write per-project model configuration to ./opencode.json.
  *
- * Accepts a primary model (for build/plan/debug) and a subagent model
- * (for fullstack/testing/security/devops). Merges into any existing
+ * Accepts a primary model (for implement/architect/fix/audit) and a subagent model
+ * (for crosslayer/qa/guard/ship). Merges into any existing
  * opencode.json at the project root, preserving other settings.
  */
 export const configure = tool({
   description:
     "Save per-project model configuration to ./opencode.json. " +
-    "Sets the model for primary agents (build, plan, debug) and subagents (fullstack, testing, security, devops). " +
+    "Sets the model for primary agents (implement, architect, fix, audit) and subagents (crosslayer, qa, guard, ship). " +
     "Available models — Premium: " +
     MODEL_REGISTRY.filter((m) => m.tier === "premium")
       .map((m) => `${m.name} (${m.id})`)
@@ -209,12 +209,12 @@ export const configure = tool({
     primaryModel: z
       .string()
       .describe(
-        "Model ID for primary agents (build, plan, debug). Format: provider/model-name"
+        "Model ID for primary agents (implement, architect, fix, audit). Format: provider/model-name"
       ),
     subagentModel: z
       .string()
       .describe(
-        "Model ID for subagents (fullstack, testing, security, devops). Format: provider/model-name"
+        "Model ID for subagents (crosslayer, qa, guard, ship). Format: provider/model-name"
       ),
   },
   async execute(args, context) {
@@ -294,10 +294,10 @@ export const configure = tool({
     return `✓ Model configuration saved to:
   ${savedTo}
 
-Primary agents (build, plan, debug):
+Primary agents (implement, architect, fix, audit):
   → ${primaryDisplay} (${args.primaryModel})
 
-Subagents (fullstack, testing, security, devops):
+Subagents (crosslayer, qa, guard, ship):
   → ${subagentDisplay} (${args.subagentModel})
 
 Restart OpenCode to apply changes.`;

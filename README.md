@@ -43,7 +43,7 @@ npx cortex-agents configure     # Pick your models interactively
 # Restart OpenCode - done.
 ```
 
-That's it. Your OpenCode session now has 8 specialized agents, 29 tools, and 14 domain skills.
+That's it. Your OpenCode session now has 8 specialized agents, 32 tools, and 14 domain skills.
 
 > **Built-in Agent Replacement** — When installed, cortex-agents automatically disables OpenCode's native `build` and `plan` agents (replaced by `implement` and `architect`). The `architect` agent becomes the default, promoting a planning-first workflow. Native agents are fully restored on `uninstall`.
 
@@ -156,7 +156,7 @@ Implement Agent detects: package.json has React + Express + Prisma
 
 ## Tools
 
-29 tools bundled and auto-registered. No configuration needed.
+32 tools bundled and auto-registered. No configuration needed.
 
 <table>
 <tr><td width="50%">
