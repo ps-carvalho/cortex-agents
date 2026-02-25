@@ -264,4 +264,65 @@ describe("findPlanContent", () => {
 
     fs.rmSync(tmpDir, { recursive: true });
   });
+
+  // ── Path Traversal Protection ──────────────────────────────────────────
+
+  it("rejects path traversal via ../", () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "cortex-test-"));
+    const plansDir = path.join(tmpDir, ".cortex", "plans");
+    fs.mkdirSync(plansDir, { recursive: true });
+
+    // Create a file outside the plans dir that should not be accessible
+    fs.writeFileSync(path.join(tmpDir, ".cortex", "secret.md"), "sensitive data");
+
+    const result = findPlanContent(tmpDir, "../secret.md");
+    expect(result).toBeNull();
+
+    fs.rmSync(tmpDir, { recursive: true });
+  });
+
+  it("rejects absolute path traversal", () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "cortex-test-"));
+    const plansDir = path.join(tmpDir, ".cortex", "plans");
+    fs.mkdirSync(plansDir, { recursive: true });
+
+    const result = findPlanContent(tmpDir, "/etc/passwd");
+    expect(result).toBeNull();
+
+    fs.rmSync(tmpDir, { recursive: true });
+  });
+
+  it("rejects nested traversal (../../)", () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "cortex-test-"));
+    const plansDir = path.join(tmpDir, ".cortex", "plans");
+    fs.mkdirSync(plansDir, { recursive: true });
+
+    // Try to escape two levels up
+    const result = findPlanContent(tmpDir, "../../package.json");
+    expect(result).toBeNull();
+
+    fs.rmSync(tmpDir, { recursive: true });
+  });
+
+  it("rejects dot as filename (directory reference)", () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "cortex-test-"));
+    const plansDir = path.join(tmpDir, ".cortex", "plans");
+    fs.mkdirSync(plansDir, { recursive: true });
+
+    const result = findPlanContent(tmpDir, ".");
+    expect(result).toBeNull();
+
+    fs.rmSync(tmpDir, { recursive: true });
+  });
+
+  it("rejects empty string as filename", () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "cortex-test-"));
+    const plansDir = path.join(tmpDir, ".cortex", "plans");
+    fs.mkdirSync(plansDir, { recursive: true });
+
+    const result = findPlanContent(tmpDir, "");
+    expect(result).toBeNull();
+
+    fs.rmSync(tmpDir, { recursive: true });
+  });
 });

@@ -43,7 +43,7 @@ npx cortex-agents configure     # Pick your models interactively
 # Restart OpenCode - done.
 ```
 
-That's it. Your OpenCode session now has 8 specialized agents, 25 tools, and 14 domain skills.
+That's it. Your OpenCode session now has 8 specialized agents, 29 tools, and 14 domain skills.
 
 > **Built-in Agent Replacement** — When installed, cortex-agents automatically disables OpenCode's native `build` and `plan` agents (replaced by `implement` and `architect`). The `architect` agent becomes the default, promoting a planning-first workflow. Native agents are fully restored on `uninstall`.
 
@@ -156,7 +156,7 @@ Implement Agent detects: package.json has React + Express + Prisma
 
 ## Tools
 
-25 tools bundled and auto-registered. No configuration needed.
+29 tools bundled and auto-registered. No configuration needed.
 
 <table>
 <tr><td width="50%">
@@ -192,8 +192,30 @@ Implement Agent detects: package.json has React + Express + Prisma
 - `task_finalize` - Stage, commit, push, create PR
   - Auto-detects worktree (targets main)
   - Auto-populates PR from `.cortex/plans/`
+  - Auto-links issues via `Closes #N` from plan metadata
   - Warns if docs are missing
 - `cortex_configure` - Set models from within an agent session
+
+</td></tr>
+<tr><td colspan="2">
+
+**GitHub Integration**
+- `github_status` - Check `gh` CLI availability, authentication, and detect GitHub Projects
+- `github_issues` - List/filter repo issues by state, labels, milestone, assignee
+- `github_projects` - List GitHub Project boards and their work items
+
+The architect agent uses these tools to browse your backlog and seed plans from real GitHub issues. Issue numbers are stored in plan frontmatter (`issues: [42, 51]`) and automatically appended as `Closes #N` to the PR body when `task_finalize` runs — GitHub auto-closes the issues when the PR merges. Supports both github.com and GitHub Enterprise Server URLs.
+
+</td></tr>
+<tr><td colspan="2">
+
+**REPL Loop** (Iterative Task-by-Task Implementation)
+- `repl_init` - Initialize a loop from a plan (parses tasks, auto-detects build/test commands)
+- `repl_status` - Get current progress, active task, retry counts (auto-advances to next task)
+- `repl_report` - Report task outcome (`pass`/`fail`/`skip`) with auto-retry and escalation
+- `repl_summary` - Generate markdown summary table for PR body
+
+The implement agent uses these tools to work through plan tasks one at a time, running build+test verification after each task. Failed tasks are automatically retried (up to a configurable limit) before escalating to the user. State is persisted to `.cortex/repl-state.json` so progress survives context compaction and session restarts.
 
 </td></tr>
 </table>
@@ -284,6 +306,7 @@ your-project/
      config.json              Configuration
      plans/                   Implementation plans (gitignored)
      sessions/                Session summaries (gitignored)
+     repl-state.json          REPL loop progress (gitignored, auto-managed)
   .opencode/
      models.json              Per-project model config (git tracked)
   .worktrees/                  Git worktrees (gitignored)
@@ -325,8 +348,14 @@ Step 3   plan_list / plan_load   Is there a plan for this work?
 Step 4   Ask: strategy           Worktree (recommended) or branch?
 Step 4b  Ask: launch mode        Terminal tab (recommended) / stay / PTY / background?
 Step 5   Execute                 Create worktree/branch, auto-detect terminal
-Step 6   Implement               Write code following the plan
-Step 7   Quality Gate            Launch @qa + @guard in parallel
+Step 6   REPL Loop               If plan loaded: repl_init → iterate tasks one-by-one
+  6a     repl_init               Parse plan tasks, auto-detect build/test commands
+  6b     repl_status             Get current task, auto-advance from pending
+  6c     Implement task          Write code for the current task only
+  6d     Build + test            Run detected build/test commands
+  6e     repl_report             Report pass/fail/skip → auto-advance or retry
+  6f     Repeat 6b-6e            Until all tasks done or user intervenes
+Step 7   Quality Gate            Launch @qa + @guard in parallel (includes repl_summary)
 Step 8   Ask: documentation      Decision doc / feature doc / flow doc?
 Step 9   session_save            Record what was done and why
 Step 10  task_finalize           Commit, push, create PR
@@ -364,6 +393,44 @@ Sub-agents use **structured return contracts** so results are actionable:
 - `MEDIUM` findings are noted in the PR body
 - `LOW` findings are deferred
 
+### REPL Loop (Iterative Implementation)
+
+When a plan is loaded, the implement agent activates a **Read-Eval-Print Loop** that works through tasks one at a time with build+test verification after each:
+
+```
+repl_init("my-plan.md")
+  → Parses plan tasks (- [ ] checkboxes)
+  → Auto-detects: npm run build, npx vitest run (vitest)
+  → Creates .cortex/repl-state.json
+
+Loop:
+  repl_status                    → "Task #1: Implement user model"
+  [agent implements task]
+  [agent runs build + tests]
+  repl_report(pass, "42 tests pass")  → "✓ Task #1 PASSED (1st attempt)"
+                                       → "→ Next: Task #2"
+
+  repl_status                    → "Task #2: Add API endpoints"
+  [agent implements task]
+  [agent runs build + tests]
+  repl_report(fail, "POST /users 500") → "⚠ Task #2 FAILED (attempt 1/3)"
+                                        → "Fix and retry. 2 retries remaining."
+  [agent fixes the issue]
+  [agent runs build + tests]
+  repl_report(pass, "All green")  → "✓ Task #2 PASSED (2nd attempt)"
+                                   → "→ Next: Task #3"
+  ...
+
+repl_summary                     → Markdown table for PR body
+```
+
+**Key behaviors:**
+- **Opt-in**: Only activates when a plan is loaded. No-plan sessions use the standard linear workflow.
+- **Auto-detection**: Scans `package.json`, `Cargo.toml`, `go.mod`, `pyproject.toml`, `Makefile`, `mix.exs` for build/test/lint commands.
+- **Retry with escalation**: Failed tasks retry up to `maxRetries` (default: 3) before asking the user how to proceed.
+- **Persistent state**: Progress saved to `.cortex/repl-state.json` — survives context compaction, session restarts, and agent switches.
+- **Skip support**: Tasks can be skipped with a reason, which is tracked in the summary.
+
 ### Agent Handover
 
 When agents switch, a toast notification tells you what mode you're in:
@@ -384,7 +451,7 @@ The Architect agent creates plans with mermaid diagrams and hands off to Impleme
 - [OpenCode](https://opencode.ai) >= 1.0.0
 - Node.js >= 18.0.0
 - Git (for branch/worktree features)
-- [GitHub CLI](https://cli.github.com/) (optional, for `task_finalize` PR creation)
+- [GitHub CLI](https://cli.github.com/) (optional, for `task_finalize` PR creation and `github_*` tools)
 
 <br>
 

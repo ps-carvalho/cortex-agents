@@ -86,6 +86,42 @@ describe("parseRepoUrl", () => {
     });
   });
 
+  describe("GitHub Enterprise URLs", () => {
+    it("should parse GitHub Enterprise HTTPS URL", () => {
+      const result = parseRepoUrl("https://github.mycompany.com/org/repo");
+      expect(result).toEqual({ owner: "org", name: "repo" });
+    });
+
+    it("should parse GitHub Enterprise HTTPS URL with .git", () => {
+      const result = parseRepoUrl("https://github.mycompany.com/org/repo.git");
+      expect(result).toEqual({ owner: "org", name: "repo" });
+    });
+
+    it("should parse GitHub Enterprise SSH URL", () => {
+      const result = parseRepoUrl("git@github.enterprise.com:org/repo.git");
+      expect(result).toEqual({ owner: "org", name: "repo" });
+    });
+
+    it("should parse GitHub Enterprise SSH URL without .git", () => {
+      const result = parseRepoUrl("git@github.internal.example.com:team/project");
+      expect(result).toEqual({ owner: "team", name: "project" });
+    });
+  });
+
+  describe("false positive rejection", () => {
+    it("should return null for notgithub.com (hostname must start with 'github')", () => {
+      expect(parseRepoUrl("https://notgithub.com/owner/repo")).toBeNull();
+    });
+
+    it("should return null for fakegithub.evil.com", () => {
+      expect(parseRepoUrl("https://fakegithub.evil.com/owner/repo")).toBeNull();
+    });
+
+    it("should return null for mygithub.com", () => {
+      expect(parseRepoUrl("https://mygithub.com/owner/repo")).toBeNull();
+    });
+  });
+
   describe("invalid URLs", () => {
     it("should return null for empty string", () => {
       expect(parseRepoUrl("")).toBeNull();
