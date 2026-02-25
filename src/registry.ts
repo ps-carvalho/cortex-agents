@@ -125,13 +125,29 @@ export const MODEL_REGISTRY: ModelEntry[] = [
 ];
 
 /** Primary agents receive the best available model */
-export const PRIMARY_AGENTS = ["build", "plan", "debug", "review"] as const;
+export const PRIMARY_AGENTS = ["implement", "architect", "fix", "audit"] as const;
 
 /** Subagents receive a fast/cost-effective model */
-export const SUBAGENTS = ["fullstack", "testing", "security", "devops"] as const;
+export const SUBAGENTS = ["crosslayer", "qa", "guard", "ship"] as const;
 
 /** All agent names combined */
 export const ALL_AGENTS = [...PRIMARY_AGENTS, ...SUBAGENTS] as const;
+
+/** OpenCode built-in agents disabled when cortex-agents is installed.
+ *  Replaced by cortex equivalents: build → implement, plan → architect */
+export const DISABLED_BUILTIN_AGENTS = ["build", "plan"] as const;
+
+/** Old agent files to clean up from previous cortex-agents versions */
+export const STALE_AGENT_FILES = [
+  "build.md",
+  "plan.md",
+  "debug.md",
+  "review.md",
+  "fullstack.md",
+  "testing.md",
+  "security.md",
+  "devops.md",
+] as const;
 
 /**
  * Build the interactive choices list for primary model selection.

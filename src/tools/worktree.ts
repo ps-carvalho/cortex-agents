@@ -6,12 +6,15 @@ import { propagatePlan } from "../utils/propagate.js";
 import { exec, git, which, shellEscape, kill, spawn as shellSpawn } from "../utils/shell.js";
 import {
   detectDriver,
+  detectFallbackDriver,
+  isIDEDriver,
   closeSession,
   writeSession,
   readSession,
   type TerminalSession,
   type TabOpenOptions,
 } from "../utils/terminal.js";
+import { getInstallHint, getIDECliBinary, detectIDE as detectIDEFromUtils } from "../utils/ide.js";
 
 const WORKTREE_ROOT = ".worktrees";
 
@@ -195,8 +198,8 @@ Use worktree_list to see existing worktrees.`;
           } catch {
             // PTY may already be closed
           }
-        } else if (session.mode === "terminal") {
-          // Close terminal tab via driver
+        } else if (session.mode === "terminal" || session.mode === "ide") {
+          // Close terminal/IDE tab via driver
           closedSession = await closeSession(session);
         } else if (session.mode === "background" && session.pid) {
           closedSession = kill(session.pid);
@@ -405,12 +408,13 @@ async function launchTerminalTab(
 
   try {
     const result = await driver.openTab(opts);
+    const isIDE = isIDEDriver(driver);
 
     // Persist session for later cleanup (e.g., worktree_remove)
     const session: TerminalSession = {
       terminal: driver.name,
       platform: process.platform,
-      mode: "terminal",
+      mode: isIDE ? "ide" : "terminal",
       branch: branchName,
       agent,
       worktreePath,
@@ -419,11 +423,57 @@ async function launchTerminalTab(
     };
     writeSession(worktreePath, session);
 
+    if (isIDE) {
+      await notify(`Opened ${driver.name} window — start OpenCode in the integrated terminal`);
+      return `✓ Opened ${driver.name} window for worktree\n\nBranch: ${branchName}\nIDE: ${driver.name}\n\nTo start working, run this in the IDE's integrated terminal:\n  opencode --agent ${agent}`;
+    }
+
     await notify(`Opened ${driver.name} tab with agent '${agent}'`);
     return `✓ Opened ${driver.name} tab in worktree\n\nBranch: ${branchName}\nTerminal: ${driver.name}`;
   } catch (error: any) {
+    // ── Fallback chain: if IDE driver failed, try a terminal driver ──
+    if (isIDEDriver(driver)) {
+      const fallbackDriver = detectFallbackDriver();
+      if (fallbackDriver) {
+        try {
+          const fallbackResult = await fallbackDriver.openTab(opts);
+
+          // Persist session with the fallback driver info
+          const session: TerminalSession = {
+            terminal: fallbackDriver.name,
+            platform: process.platform,
+            mode: "terminal",
+            branch: branchName,
+            agent,
+            worktreePath,
+            startedAt: new Date().toISOString(),
+            ...fallbackResult,
+          };
+          writeSession(worktreePath, session);
+
+          // Warning toast (not error) — the system recovered
+          const ide = detectIDEFromUtils();
+          const cliBinary = getIDECliBinary(ide);
+          const hint = cliBinary ? getInstallHint(ide.type, cliBinary) : "";
+          const hintMsg = hint ? `\nFix: ${hint}` : "";
+          await notify(
+            `${driver.name} CLI not available. Opened ${fallbackDriver.name} instead.${hintMsg}`,
+            "warning",
+          );
+
+          return `✓ Opened ${fallbackDriver.name} tab (fallback from ${driver.name})\n\nBranch: ${branchName}\nTerminal: ${fallbackDriver.name}\n\nNote: ${driver.name} CLI was not found in PATH.${hintMsg}`;
+        } catch {
+          // Fallback driver also failed — fall through to manual command
+        }
+      }
+    }
+
     await notify(`Could not open terminal: ${error.message || error}`, "error");
-    const innerCmd = `cd "${worktreePath}" && "${opencodeBin}" --agent ${agent}`;
+    // Escape all user-controlled inputs in the manual command to prevent injection
+    const safePath = shellEscape(worktreePath);
+    const safeBin = shellEscape(opencodeBin);
+    const safeAgent = shellEscape(agent);
+    const innerCmd = `cd "${safePath}" && "${safeBin}" --agent "${safeAgent}"`;
     return `✗ Could not open terminal (${driver.name}). Manual command:\n  ${innerCmd}`;
   }
 }
@@ -683,7 +733,7 @@ export function createLaunch(client: Client, shell: Shell) {
       agent: tool.schema
         .string()
         .optional()
-        .describe("Agent to use in the new session (default: 'build')"),
+        .describe("Agent to use in the new session (default: 'implement')"),
       prompt: tool.schema
         .string()
         .optional()
@@ -694,7 +744,7 @@ export function createLaunch(client: Client, shell: Shell) {
         name,
         mode,
         plan: planFilename,
-        agent = "build",
+        agent = "implement",
         prompt: customPrompt,
       } = args;
 

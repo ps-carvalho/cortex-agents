@@ -1,5 +1,4 @@
-# Keep plans (they're valuable documentation)
-!plans/
+plans/
 
 # Ignore session files (local context)
 sessions/

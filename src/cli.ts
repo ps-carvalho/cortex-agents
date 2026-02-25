@@ -8,11 +8,13 @@ import {
   PRIMARY_AGENTS,
   SUBAGENTS,
   ALL_AGENTS,
+  DISABLED_BUILTIN_AGENTS,
+  STALE_AGENT_FILES,
   getPrimaryChoices,
   getSubagentChoices,
 } from "./registry.js";
 
-const VERSION = "2.3.0";
+const VERSION = "3.3.0";
 const PLUGIN_NAME = "cortex-agents";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -25,6 +27,7 @@ const PACKAGE_OPENCODE_DIR = path.resolve(__dirname, "..", ".opencode");
 
 interface AgentConfig {
   model?: string;
+  disable?: boolean;
   [key: string]: unknown;
 }
 
@@ -32,6 +35,8 @@ interface OpencodeConfig {
   $schema?: string;
   plugin?: string[];
   agent?: { [key: string]: AgentConfig | undefined };
+  default_agent?: string;
+  defaultAgent?: string; // legacy — cleaned up on write
   [key: string]: unknown;
 }
 
@@ -190,6 +195,24 @@ function installAgentsAndSkills(targetDir: string): void {
   }
 }
 
+function cleanupStaleAgents(globalDir: string): void {
+  const agentsDir = path.join(globalDir, "agents");
+  if (!fs.existsSync(agentsDir)) return;
+  for (const file of STALE_AGENT_FILES) {
+    const filePath = path.join(agentsDir, file);
+    try {
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+        console.log(`  Cleaned up stale agent: ${file}`);
+      }
+    } catch (err) {
+      console.warn(
+        `  Warning: Could not remove stale agent ${file}: ${(err as Error).message}`
+      );
+    }
+  }
+}
+
 function removeAgentsAndSkills(targetDir: string): void {
   const agentsSrc = path.join(PACKAGE_OPENCODE_DIR, "agents");
   const skillsSrc = path.join(PACKAGE_OPENCODE_DIR, "skills");
@@ -231,9 +254,15 @@ function install(): void {
       fs.mkdirSync(globalDir, { recursive: true });
     }
     const globalPath = path.join(globalDir, "opencode.json");
+    const disabledAgents: { [key: string]: AgentConfig } = {};
+    for (const name of DISABLED_BUILTIN_AGENTS) {
+      disabledAgents[name] = { disable: true };
+    }
     const newConfig: OpencodeConfig = {
       $schema: "https://opencode.ai/config.json",
       plugin: [PLUGIN_NAME],
+      default_agent: "architect",
+      agent: disabledAgents,
     };
     writeConfig(globalPath, newConfig);
     console.log(`Created config: ${globalPath}`);
@@ -243,16 +272,29 @@ function install(): void {
     if (!config.plugin) config.plugin = [];
     if (!config.plugin.includes(PLUGIN_NAME)) {
       config.plugin.push(PLUGIN_NAME);
-      writeConfig(configInfo.path, config);
-      console.log(`Added plugin to config: ${configInfo.path}\n`);
-    } else {
-      console.log(`Plugin already in config: ${configInfo.path}\n`);
     }
+
+    // Disable built-in agents that cortex-agents replaces
+    if (!config.agent) config.agent = {};
+    for (const name of DISABLED_BUILTIN_AGENTS) {
+      if (!config.agent[name]) config.agent[name] = {};
+      config.agent[name]!.disable = true;
+    }
+
+    // Set default_agent, clean legacy camelCase key
+    config.default_agent = "architect";
+    delete config.defaultAgent;
+
+    writeConfig(configInfo.path, config);
+    console.log(`Updated config: ${configInfo.path}\n`);
   }
 
   // Copy agents and skills into the global opencode config dir
   console.log("Installing agents and skills...");
   installAgentsAndSkills(globalDir);
+
+  // Clean up stale agent files from previous cortex-agents versions
+  cleanupStaleAgents(globalDir);
 
   // Sync per-project models if .opencode/models.json exists
   if (hasProjectModelsConfig()) {
@@ -296,11 +338,26 @@ function uninstall(): void {
         }
       }
     }
+
+    // Re-enable built-in agents
+    for (const name of DISABLED_BUILTIN_AGENTS) {
+      if (config.agent[name]) {
+        delete config.agent[name]!.disable;
+        if (Object.keys(config.agent[name]!).length === 0) {
+          delete config.agent[name];
+        }
+      }
+    }
+
     // Clean up empty agent object
     if (Object.keys(config.agent).length === 0) {
       delete config.agent;
     }
   }
+
+  // Remove default_agent + clean legacy key
+  delete config.default_agent;
+  delete config.defaultAgent;
 
   writeConfig(configInfo.path, config);
 
@@ -354,6 +411,13 @@ async function configure(): Promise<void> {
     config.plugin.push(PLUGIN_NAME);
   }
 
+  // Set default agent to architect (planning-first workflow)
+  if (!config.default_agent) {
+    config.default_agent = "architect";
+  }
+  // Clean legacy camelCase key
+  delete config.defaultAgent;
+
   // ── Primary model selection ────────────────────────────────
   const { primary, subagent } = await promptModelSelection();
 
@@ -362,6 +426,15 @@ async function configure(): Promise<void> {
     // Per-project: write .opencode/models.json + sync to local opencode.json
     writeProjectModels(primary, subagent);
     syncProjectModelsToConfig();
+
+    // Ensure default agent is set in local opencode.json
+    const localConfig = readConfig(path.join(process.cwd(), "opencode.json"));
+    if (!localConfig.default_agent) {
+      localConfig.default_agent = "architect";
+    }
+    // Clean legacy camelCase key
+    delete localConfig.defaultAgent;
+    writeConfig(path.join(process.cwd(), "opencode.json"), localConfig);
 
     const modelsPath = getProjectModelsPath();
     const localConfigPath = path.join(process.cwd(), "opencode.json");
@@ -382,6 +455,12 @@ async function configure(): Promise<void> {
     for (const name of SUBAGENTS) {
       if (!config.agent[name]) config.agent[name] = {};
       config.agent[name]!.model = subagent;
+    }
+
+    // Re-assert disable entries for built-in agents
+    for (const name of DISABLED_BUILTIN_AGENTS) {
+      if (!config.agent[name]) config.agent[name] = {};
+      config.agent[name]!.disable = true;
     }
 
     const targetPath =
@@ -421,7 +500,7 @@ async function promptModelSelection(): Promise<{
   });
 
   console.log(
-    "Primary agents (build, plan, debug, review) handle complex tasks.\nUse your best available model.\n"
+    "Primary agents (implement, architect, fix, audit) handle complex tasks.\nUse your best available model.\n"
   );
 
   const { primaryModel } = await prompts({
@@ -464,7 +543,7 @@ async function promptModelSelection(): Promise<{
   });
 
   console.log(
-    "Subagents (fullstack, testing, security, devops) handle focused tasks.\nA faster/cheaper model works great here.\n"
+    "Subagents (crosslayer, qa, guard, ship) handle focused tasks.\nA faster/cheaper model works great here.\n"
   );
 
   const { subagentModel } = await prompts({
@@ -717,18 +796,20 @@ EXAMPLES:
   npx ${PLUGIN_NAME} status                     # Check status
 
 AGENTS:
-  Primary (build, plan, debug, review):
+  Primary (implement, architect, fix, audit):
     Handle complex tasks — select your best model.
 
-  Subagents (fullstack, testing, security, devops):
+  Subagents (crosslayer, qa, guard, ship):
     Handle focused tasks — a fast/cheap model works great.
 
-TOOLS (23):
+TOOLS (25):
   cortex_init, cortex_status      .cortex directory management
   cortex_configure                Per-project model configuration
   worktree_create, worktree_list  Git worktree management
   worktree_remove, worktree_open
   worktree_launch                 Launch worktree (terminal/PTY/background)
+  detect_environment              Detect IDE/terminal for launch options
+  get_environment_info            Quick environment info for agents
   branch_create, branch_status    Git branch operations
   branch_switch
   plan_save, plan_list            Plan persistence

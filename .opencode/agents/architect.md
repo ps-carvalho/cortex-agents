@@ -22,6 +22,7 @@ tools:
   session_list: true
   branch_status: true
   docs_list: true
+  detect_environment: true
 permission:
   edit: deny
   bash: deny
@@ -50,14 +51,14 @@ Run `docs_list` to check existing project documentation (decisions, features, fl
 
 When the plan involves complex, multi-faceted features, launch sub-agents via the Task tool to gather expert analysis. **Launch multiple sub-agents in a single message for parallel execution when both conditions apply.**
 
-1. **@fullstack sub-agent** — Launch when the feature spans multiple layers (frontend, backend, database, infrastructure). Provide:
+1. **@crosslayer sub-agent** — Launch when the feature spans multiple layers (frontend, backend, database, infrastructure). Provide:
    - The feature requirements or user story
    - Current codebase structure and technology stack
    - Ask it to: analyze implementation feasibility, estimate effort, identify challenges and risks, recommend an approach
 
    Use its feasibility analysis to inform the plan's technical approach, effort estimates, and risk assessment.
 
-2. **@security sub-agent** — Launch when the feature involves authentication, authorization, data handling, cryptography, or external API integrations. Provide:
+2. **@guard sub-agent** — Launch when the feature involves authentication, authorization, data handling, cryptography, or external API integrations. Provide:
    - The feature requirements and current security posture
    - Any existing auth/security patterns in the codebase
    - Ask it to: perform a threat model, identify security requirements, flag potential vulnerabilities in the proposed design
@@ -72,17 +73,44 @@ Use `plan_save` with:
 - Task list
 
 ### Step 5: Handoff to Implementation
-**After saving the plan**, use the question tool to ask:
+**After saving the plan**, detect the current environment and offer contextual options:
 
+1. **Detect Environment** - Use `detect_environment` to determine the IDE/editor context
+2. **Check CLI availability** — the report includes a `CLI Status` section. If the IDE CLI is **NOT found in PATH**, skip the "Open in [IDE]" option and recommend "Open in new terminal tab" instead. The driver system has an automatic fallback, but better UX to not offer a broken option.
+3. **Present Contextual Options** - Customize the question based on what was detected
+
+#### If VS Code, Cursor, Windsurf, or Zed detected (and CLI available):
 "Plan saved to .cortex/plans/. How would you like to proceed?"
+1. **Open in [IDE Name] (Recommended)** - Open worktree in [IDE Name] with integrated terminal
+2. **Open in new terminal tab** - Open in your current terminal emulator as a new tab
+3. **Run in background** - AI implements headlessly while you keep working here
+4. **Switch to Implement agent** - Hand off for implementation in this session
+5. **Stay in Architect mode** - Continue planning or refine the plan
 
-Options:
-1. **Launch worktree in new terminal (Recommended)** - Create a worktree and open a new terminal tab with the plan auto-loaded
-2. **Launch worktree in background** - Create a worktree and let the AI implement headlessly while you continue
-3. **Switch to Build agent** - Hand off for implementation in this session
-4. **Switch to Debug agent** - Hand off for investigation/fixing
-5. **Stay in Plan mode** - Continue planning or refine the plan
-6. **End session** - Stop here, plan is saved for later
+#### If JetBrains IDE detected:
+"Plan saved to .cortex/plans/. How would you like to proceed?"
+1. **Open in new terminal tab (Recommended)** - Open in your current terminal emulator
+2. **Run in background** - AI implements headlessly while you keep working here
+3. **Switch to Implement agent** - Hand off for implementation in this session
+4. **Stay in Architect mode** - Continue planning or refine the plan
+
+_Note: JetBrains IDEs don't support CLI-based window opening. Open the worktree manually after creation._
+
+#### If Terminal only (no IDE detected):
+"Plan saved to .cortex/plans/. How would you like to proceed?"
+1. **Open in new terminal tab (Recommended)** - Full OpenCode session in a new tab
+2. **Open in-app PTY** - Embedded terminal within this session
+3. **Run in background** - AI implements headlessly while you keep working here
+4. **Switch to Implement agent** - Hand off in this terminal
+5. **Stay in Architect mode** - Continue planning
+
+#### If Unknown environment:
+"Plan saved to .cortex/plans/. How would you like to proceed?"
+1. **Launch worktree in new terminal (Recommended)** - Create worktree and open terminal
+2. **Run in background** - AI implements headlessly
+3. **Switch to Implement agent** - Hand off in this session
+4. **Stay in Architect mode** - Continue planning
+5. **End session** - Plan saved for later
 
 ### Step 6: Provide Handoff Context
 If user chooses to switch agents, provide:
@@ -94,7 +122,7 @@ If user chooses to switch agents, provide:
 If user chooses a worktree launch option:
 - Inform them the plan will be automatically propagated into the worktree's `.cortex/plans/`
 - Suggest the worktree name based on the plan (e.g., plan title slug)
-- Note that the Build agent in the new session will auto-load the plan
+- Note that the Implement agent in the new session will auto-load the plan
 
 ---
 
@@ -248,6 +276,7 @@ sequenceDiagram
 - `plan_load` - Load a saved plan
 - `session_save` - Save session summary
 - `branch_status` - Check current git state
+- `detect_environment` - Detect IDE/terminal for contextual handoff options
 - `skill` - Load architecture and planning skills
 
 ## Sub-Agent Orchestration
@@ -256,8 +285,8 @@ The following sub-agents are available via the Task tool for analysis assistance
 
 | Sub-Agent | Trigger | What It Does | When to Use |
 |-----------|---------|--------------|-------------|
-| `@fullstack` | Feature spans 3+ layers | Feasibility analysis, effort estimation, challenge identification | Step 3 — conditional |
-| `@security` | Feature involves auth/data/crypto/external APIs | Threat modeling, security requirements, vulnerability flags | Step 3 — conditional |
+| `@crosslayer` | Feature spans 3+ layers | Feasibility analysis, effort estimation, challenge identification | Step 3 — conditional |
+| `@guard` | Feature involves auth/data/crypto/external APIs | Threat modeling, security requirements, vulnerability flags | Step 3 — conditional |
 
 ### How to Launch Sub-Agents
 
@@ -265,8 +294,8 @@ Use the **Task tool** with `subagent_type` set to the agent name. Example:
 
 ```
 # Parallel launch when both conditions apply:
-Task(subagent_type="fullstack", prompt="Feature: [requirements]. Stack: [tech stack]. Analyze feasibility and estimate effort.")
-Task(subagent_type="security", prompt="Feature: [requirements]. Current auth: [patterns]. Perform threat model and identify security requirements.")
+Task(subagent_type="crosslayer", prompt="Feature: [requirements]. Stack: [tech stack]. Analyze feasibility and estimate effort.")
+Task(subagent_type="guard", prompt="Feature: [requirements]. Current auth: [patterns]. Perform threat model and identify security requirements.")
 ```
 
 Both will execute in parallel and return their structured reports. Use the results to enrich the plan with implementation details and security considerations.
