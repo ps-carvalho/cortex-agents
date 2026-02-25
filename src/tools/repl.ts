@@ -56,13 +56,17 @@ export const init = tool({
     const { planFilename, buildCommand, testCommand, maxRetries = 3 } = args;
     const cwd = context.worktree;
 
-    // 1. Load plan content
+    // 1. Validate plan filename
+    if (!planFilename || planFilename === "." || planFilename === "..") {
+      return `\u2717 Error: Invalid plan filename.`;
+    }
+
     const plansDir = path.join(cwd, CORTEX_DIR, PLANS_DIR);
     const planPath = path.resolve(plansDir, planFilename);
     const resolvedPlansDir = path.resolve(plansDir);
 
-    // Prevent path traversal
-    if (!planPath.startsWith(resolvedPlansDir + path.sep) && planPath !== resolvedPlansDir) {
+    // Prevent path traversal — resolved path must be strictly inside plans dir
+    if (!planPath.startsWith(resolvedPlansDir + path.sep)) {
       return `\u2717 Error: Invalid plan filename.`;
     }
 

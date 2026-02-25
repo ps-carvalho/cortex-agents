@@ -46,16 +46,24 @@ permission:
     "git worktree*": allow
     "git diff*": allow
     "ls*": allow
-    "npm run build*": allow
-    "npm test*": allow
-    "npx vitest*": allow
-    "cargo build*": allow
-    "cargo test*": allow
-    "go build*": allow
-    "go test*": allow
-    "make build*": allow
-    "make test*": allow
-    "pytest*": allow
+    "npm run build": allow
+    "npm run build --*": allow
+    "npm test": allow
+    "npm test --*": allow
+    "npx vitest run": allow
+    "npx vitest run *": allow
+    "cargo build": allow
+    "cargo build --*": allow
+    "cargo test": allow
+    "cargo test --*": allow
+    "go build ./...": allow
+    "go test ./...": allow
+    "make build": allow
+    "make test": allow
+    "pytest": allow
+    "pytest *": allow
+    "npm run lint": allow
+    "npm run lint --*": allow
 ---
 
 You are an expert software developer. Your role is to write clean, maintainable, and well-tested code.

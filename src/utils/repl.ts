@@ -8,6 +8,7 @@
  * compaction, session restarts, and agent switches.
  */
 
+import * as crypto from "crypto";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -288,7 +289,22 @@ export function readReplState(cwd: string): ReplState | null {
   if (!fs.existsSync(filepath)) return null;
 
   try {
-    return JSON.parse(fs.readFileSync(filepath, "utf-8")) as ReplState;
+    const raw = JSON.parse(fs.readFileSync(filepath, "utf-8"));
+
+    // Runtime shape validation — reject corrupted or tampered state
+    if (
+      typeof raw !== "object" ||
+      raw === null ||
+      typeof raw.planFilename !== "string" ||
+      typeof raw.startedAt !== "string" ||
+      typeof raw.maxRetries !== "number" ||
+      typeof raw.currentTaskIndex !== "number" ||
+      !Array.isArray(raw.tasks)
+    ) {
+      return null;
+    }
+
+    return raw as ReplState;
   } catch {
     return null;
   }
@@ -306,10 +322,21 @@ export function writeReplState(cwd: string, state: ReplState): void {
     fs.mkdirSync(dir, { recursive: true });
   }
 
-  // Atomic write: write to temp, then rename
-  const tmpPath = filepath + ".tmp";
-  fs.writeFileSync(tmpPath, JSON.stringify(state, null, 2));
-  fs.renameSync(tmpPath, filepath);
+  // Atomic write: write to unique temp file, then rename
+  const suffix = crypto.randomBytes(6).toString("hex");
+  const tmpPath = `${filepath}.${suffix}.tmp`;
+  try {
+    fs.writeFileSync(tmpPath, JSON.stringify(state, null, 2));
+    fs.renameSync(tmpPath, filepath);
+  } catch (err) {
+    // Clean up temp file on failure
+    try {
+      fs.unlinkSync(tmpPath);
+    } catch {
+      // Ignore cleanup errors
+    }
+    throw err;
+  }
 }
 
 /**
@@ -444,10 +471,11 @@ export function formatSummary(state: ReplState): string {
 
   for (const task of state.tasks) {
     const num = task.index + 1;
-    // Truncate long descriptions for the table
-    const desc = task.description.length > 60
+    // Truncate long descriptions for the table and sanitize for markdown
+    const rawDesc = task.description.length > 60
       ? task.description.substring(0, 57) + "..."
       : task.description;
+    const desc = rawDesc.replace(/\|/g, "\\|").replace(/\n/g, " ");
 
     let statusIcon: string;
     let attempts: string;
