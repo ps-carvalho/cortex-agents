@@ -765,6 +765,182 @@ class GnomeTerminalDriver implements TerminalDriver {
   }
 }
 
+// ─── Ghostty (macOS/Linux) ───────────────────────────────────────────────────
+
+class GhosttyDriver implements TerminalDriver {
+  readonly name = "ghostty";
+
+  detect(): boolean {
+    return !!process.env.GHOSTTY_RESOURCES_DIR ||
+           process.env.TERM_PROGRAM === "ghostty";
+  }
+
+  async openTab(opts: TabOpenOptions): Promise<Partial<TerminalSession>> {
+    const safePath = shellEscape(opts.worktreePath);
+    const safeBin = shellEscape(opts.opencodeBin);
+    const safeAgent = shellEscape(opts.agent);
+
+    // macOS: use AppleScript to create a new tab in the running Ghostty instance
+    if (process.platform === "darwin") {
+      const script = `tell application "Ghostty"
+  activate
+end tell
+tell application "System Events"
+  tell process "Ghostty"
+    keystroke "t" using command down
+    delay 0.3
+    keystroke "cd \\"${safePath}\\" && \\"${safeBin}\\" --agent ${safeAgent}"
+    key code 36
+  end tell
+end tell`;
+      try {
+        await exec("osascript", ["-e", script]);
+        return {};
+      } catch {
+        // Fall through to spawn
+      }
+    }
+
+    // Linux / fallback: spawn a new ghostty window
+    const cmd = buildTabCommand(opts);
+    const ghosttyBin = await which("ghostty");
+    if (ghosttyBin) {
+      const child = spawn("ghostty", [
+        "-e",
+        "bash",
+        "-c",
+        cmd,
+      ], { cwd: opts.worktreePath });
+      return { pid: child.pid ?? undefined };
+    }
+
+    throw new Error("Failed to open Ghostty tab");
+  }
+
+  async closeTab(session: TerminalSession): Promise<boolean> {
+    if (session.pid) return killPid(session.pid);
+    return false;
+  }
+}
+
+// ─── Alacritty (Linux/macOS) ─────────────────────────────────────────────────
+
+class AlacrittyDriver implements TerminalDriver {
+  readonly name = "alacritty";
+
+  detect(): boolean {
+    return !!process.env.ALACRITTY_WINDOW_ID ||
+           !!process.env.ALACRITTY_LOG ||
+           process.env.TERM_PROGRAM === "alacritty";
+  }
+
+  async openTab(opts: TabOpenOptions): Promise<Partial<TerminalSession>> {
+    const cmd = buildTabCommand(opts);
+
+    // Alacritty doesn't support tabs natively — open a new window
+    const child = spawn("alacritty", [
+      "--working-directory",
+      opts.worktreePath,
+      "--title",
+      `Worktree: ${opts.branchName}`,
+      "-e",
+      "bash",
+      "-c",
+      cmd,
+    ], { cwd: opts.worktreePath });
+    return { pid: child.pid ?? undefined };
+  }
+
+  async closeTab(session: TerminalSession): Promise<boolean> {
+    if (session.pid) return killPid(session.pid);
+    return false;
+  }
+}
+
+// ─── Hyper (Electron-based) ──────────────────────────────────────────────────
+
+class HyperDriver implements TerminalDriver {
+  readonly name = "hyper";
+
+  detect(): boolean {
+    return process.env.TERM_PROGRAM === "Hyper";
+  }
+
+  async openTab(opts: TabOpenOptions): Promise<Partial<TerminalSession>> {
+    const safePath = shellEscape(opts.worktreePath);
+    const safeBin = shellEscape(opts.opencodeBin);
+    const safeAgent = shellEscape(opts.agent);
+
+    // macOS: use AppleScript to open a new tab in Hyper
+    if (process.platform === "darwin") {
+      const script = `tell application "Hyper"
+  activate
+end tell
+tell application "System Events"
+  tell process "Hyper"
+    keystroke "t" using command down
+    delay 0.3
+    keystroke "cd \\"${safePath}\\" && \\"${safeBin}\\" --agent ${safeAgent}"
+    key code 36
+  end tell
+end tell`;
+      try {
+        await exec("osascript", ["-e", script]);
+        return {};
+      } catch {
+        // Fall through to spawn
+      }
+    }
+
+    // Fallback: spawn via hyper CLI
+    const hyperBin = await which("hyper");
+    if (hyperBin) {
+      const child = spawn("hyper", [opts.worktreePath], { cwd: opts.worktreePath });
+      return { pid: child.pid ?? undefined };
+    }
+
+    throw new Error("Failed to open Hyper tab");
+  }
+
+  async closeTab(session: TerminalSession): Promise<boolean> {
+    if (session.pid) return killPid(session.pid);
+    return false;
+  }
+}
+
+// ─── Rio (Rust-based terminal) ───────────────────────────────────────────────
+
+class RioDriver implements TerminalDriver {
+  readonly name = "rio";
+
+  detect(): boolean {
+    return process.env.TERM_PROGRAM === "rio";
+  }
+
+  async openTab(opts: TabOpenOptions): Promise<Partial<TerminalSession>> {
+    const cmd = buildTabCommand(opts);
+
+    // Rio supports tabs but has no IPC — spawn a new window
+    const rioBin = await which("rio");
+    if (rioBin) {
+      const child = spawn("rio", [
+        "-e",
+        "bash",
+        "-c",
+        cmd,
+      ], { cwd: opts.worktreePath });
+      return { pid: child.pid ?? undefined };
+    }
+
+    throw new Error("Failed to open Rio terminal");
+  }
+
+  async closeTab(session: TerminalSession): Promise<boolean> {
+    if (session.pid) return killPid(session.pid);
+    return false;
+  }
+}
+
 // ─── Fallback (PID-based, always matches) ────────────────────────────────────
 
 class FallbackDriver implements TerminalDriver {
@@ -868,6 +1044,10 @@ const DRIVERS: TerminalDriver[] = [
   new TerminalAppDriver(),
   new KittyDriver(),
   new WeztermDriver(),
+  new GhosttyDriver(),
+  new AlacrittyDriver(),
+  new HyperDriver(),
+  new RioDriver(),
   new KonsoleDriver(),
   new GnomeTerminalDriver(),
   // Fallback
@@ -1000,4 +1180,266 @@ export async function getAvailableIDEs(): Promise<string[]> {
   }
 
   return available;
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Multi-Strategy Terminal Detection (for "Open in terminal tab" intent)
+// ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Result from the multi-strategy detection chain.
+ * Includes the matched driver and how it was found (for diagnostics).
+ */
+export interface TerminalDetectionResult {
+  driver: TerminalDriver;
+  strategy: "env" | "process-tree" | "frontmost-app" | "user-config" | "fallback";
+  detail?: string; // e.g., process name, bundle ID, config value
+}
+
+// ─── Strategy 1: Environment variable detection (skip IDE drivers) ───────────
+
+function detectTerminalFromEnv(): TerminalDriver | null {
+  for (const driver of DRIVERS) {
+    if (isIDEDriver(driver)) continue;
+    if (driver instanceof FallbackDriver) continue;
+    if (driver.detect()) return driver;
+  }
+  return null;
+}
+
+// ─── Strategy 2: Process-tree detection ──────────────────────────────────────
+
+/**
+ * Map of known process names (lowercase) to terminal driver names.
+ * Used by process-tree detection to match parent processes.
+ */
+const PROCESS_NAME_MAP: Record<string, string> = {
+  // macOS process names (from ps -o comm=)
+  "iterm2": "iterm2",
+  "terminal": "terminal.app",
+  "kitty": "kitty",
+  "ghostty": "ghostty",
+  "alacritty": "alacritty",
+  "wezterm-gui": "wezterm",
+  "wezterm": "wezterm",
+  "hyper": "hyper",
+  "rio": "rio",
+  // Linux process names
+  "gnome-terminal-server": "gnome-terminal",
+  "gnome-terminal-": "gnome-terminal",
+  "konsole": "konsole",
+  // Multiplexers
+  "tmux: server": "tmux",
+  "tmux": "tmux",
+};
+
+/**
+ * Walk up the process parent chain to find a known terminal emulator.
+ * Works on macOS (ps) and Linux (/proc). Stops after 15 ancestors or PID <= 1.
+ */
+async function detectFromProcessTree(): Promise<{ driver: TerminalDriver; detail: string } | null> {
+  const MAX_DEPTH = 15;
+  let pid = process.ppid || process.pid;
+  const visited = new Set<number>();
+
+  if (process.platform === "darwin" || process.platform === "linux") {
+    for (let depth = 0; depth < MAX_DEPTH && pid > 1 && !visited.has(pid); depth++) {
+      visited.add(pid);
+
+      try {
+        let comm = "";
+        let ppid = 0;
+
+        if (process.platform === "linux") {
+          // Linux: read /proc/<pid>/comm and /proc/<pid>/stat
+          try {
+            const commData = fs.readFileSync(`/proc/${pid}/comm`, "utf-8").trim();
+            comm = commData;
+            const statData = fs.readFileSync(`/proc/${pid}/stat`, "utf-8");
+            // Format: pid (comm) state ppid ...
+            const match = statData.match(/\)\s+\S+\s+(\d+)/);
+            ppid = match ? parseInt(match[1], 10) : 0;
+          } catch {
+            break; // Can't read /proc — permission denied or process gone
+          }
+        } else {
+          // macOS: use ps to get parent PID and command name
+          const result = await exec("ps", ["-o", "ppid=", "-o", "comm=", "-p", String(pid)], {
+            timeout: 2000,
+            nothrow: true,
+          });
+          const output = result.stdout.trim();
+          if (!output) break;
+
+          // Parse: "  1234 /Applications/Ghostty.app/Contents/MacOS/ghostty"
+          const spaceIdx = output.trimStart().indexOf(" ");
+          if (spaceIdx === -1) break;
+          const trimmed = output.trimStart();
+          ppid = parseInt(trimmed.substring(0, spaceIdx), 10);
+          const fullPath = trimmed.substring(spaceIdx).trim();
+          // Extract just the binary name from the full path
+          comm = fullPath.split("/").pop() || fullPath;
+        }
+
+        if (!comm) break;
+
+        // Match against known process names (case-insensitive)
+        const commLower = comm.toLowerCase();
+        for (const [processName, driverName] of Object.entries(PROCESS_NAME_MAP)) {
+          if (commLower === processName || commLower.startsWith(processName)) {
+            const driver = getDriverByName(driverName);
+            if (driver) {
+              return { driver, detail: `process "${comm}" at PID ${pid}` };
+            }
+          }
+        }
+
+        pid = ppid;
+      } catch {
+        break; // ps failed or process tree unavailable
+      }
+    }
+  }
+
+  return null;
+}
+
+// ─── Strategy 3: Frontmost app detection (macOS only) ────────────────────────
+
+/**
+ * Map of macOS bundle identifiers to terminal driver names.
+ */
+const BUNDLE_ID_MAP: Record<string, string> = {
+  "com.googlecode.iterm2": "iterm2",
+  "com.apple.terminal": "terminal.app",
+  "net.kovidgoyal.kitty": "kitty",
+  "com.mitchellh.ghostty": "ghostty",
+  "org.alacritty": "alacritty",
+  "com.github.wez.wezterm": "wezterm",
+  "co.zeit.hyper": "hyper",
+  "com.raphaelamorim.rio": "rio",
+};
+
+/**
+ * Detect the frontmost application on macOS and match to a terminal driver.
+ * Uses AppleScript to query System Events for the frontmost process's bundle ID.
+ *
+ * This catches cases where the process tree doesn't contain the terminal
+ * (e.g., launched via Spotlight or a launcher).
+ */
+async function detectFromFrontmostApp(): Promise<{ driver: TerminalDriver; detail: string } | null> {
+  if (process.platform !== "darwin") return null;
+
+  try {
+    const script = 'tell application "System Events" to get bundle identifier of first process whose frontmost is true';
+    const result = await exec("osascript", ["-e", script], { timeout: 3000, nothrow: true });
+    const bundleId = result.stdout.trim().toLowerCase();
+
+    if (!bundleId) return null;
+
+    // Direct lookup
+    const driverName = BUNDLE_ID_MAP[bundleId];
+    if (driverName) {
+      const driver = getDriverByName(driverName);
+      if (driver) {
+        return { driver, detail: `frontmost app bundle "${bundleId}"` };
+      }
+    }
+
+    // Partial match (e.g., "com.apple.Terminal" vs "com.apple.terminal")
+    for (const [knownBundle, driverName] of Object.entries(BUNDLE_ID_MAP)) {
+      if (bundleId.includes(knownBundle) || knownBundle.includes(bundleId)) {
+        const driver = getDriverByName(driverName);
+        if (driver) {
+          return { driver, detail: `frontmost app bundle "${bundleId}" (partial match)` };
+        }
+      }
+    }
+  } catch {
+    // AppleScript failed — accessibility permissions may be missing
+  }
+
+  return null;
+}
+
+// ─── Strategy 4: User preference from .cortex/config.json ───────────────────
+
+/**
+ * Read the user's preferred terminal from .cortex/config.json.
+ * Format: { "preferredTerminal": "ghostty" }
+ *
+ * Accepts any driver name registered in the DRIVERS array.
+ * This is the escape hatch for unusual setups where auto-detection fails.
+ */
+function getPreferredTerminal(projectRoot?: string): TerminalDriver | null {
+  const roots = [
+    projectRoot,
+    process.cwd(),
+    process.env.HOME,
+  ].filter(Boolean) as string[];
+
+  for (const root of roots) {
+    const configPath = path.join(root, ".cortex", "config.json");
+    if (!fs.existsSync(configPath)) continue;
+
+    try {
+      const config = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+      if (config.preferredTerminal && typeof config.preferredTerminal === "string") {
+        const driver = getDriverByName(config.preferredTerminal);
+        if (driver && !isIDEDriver(driver)) {
+          return driver;
+        }
+      }
+    } catch {
+      // Invalid JSON — skip
+    }
+  }
+
+  return null;
+}
+
+// ─── Main entry point: detectTerminalDriver() ───────────────────────────────
+
+/**
+ * Async multi-strategy detection of the user's terminal emulator.
+ *
+ * This is the PRIMARY function for "Open in terminal tab" — it NEVER returns
+ * an IDE driver. Use `detectDriver()` for IDE-first detection (e.g., "Open in IDE").
+ *
+ * Strategy chain:
+ *   1. Environment variables (fast, synchronous)
+ *   2. Process-tree walk (macOS: ps, Linux: /proc)
+ *   3. Frontmost application (macOS: AppleScript)
+ *   4. User preference (.cortex/config.json)
+ *   5. FallbackDriver (last resort)
+ *
+ * @param projectRoot — optional project root for reading .cortex/config.json
+ */
+export async function detectTerminalDriver(projectRoot?: string): Promise<TerminalDetectionResult> {
+  // Strategy 1: Environment variables (fastest — no subprocess needed)
+  const envDriver = detectTerminalFromEnv();
+  if (envDriver) {
+    return { driver: envDriver, strategy: "env", detail: `env match: ${envDriver.name}` };
+  }
+
+  // Strategy 2: Process-tree walk
+  const treeResult = await detectFromProcessTree();
+  if (treeResult) {
+    return { driver: treeResult.driver, strategy: "process-tree", detail: treeResult.detail };
+  }
+
+  // Strategy 3: Frontmost app (macOS only)
+  const frontmostResult = await detectFromFrontmostApp();
+  if (frontmostResult) {
+    return { driver: frontmostResult.driver, strategy: "frontmost-app", detail: frontmostResult.detail };
+  }
+
+  // Strategy 4: User preference
+  const preferred = getPreferredTerminal(projectRoot);
+  if (preferred) {
+    return { driver: preferred, strategy: "user-config", detail: `config: ${preferred.name}` };
+  }
+
+  // Strategy 5: Fallback
+  return { driver: new FallbackDriver(), strategy: "fallback", detail: "no terminal detected" };
 }
