@@ -43,7 +43,7 @@ npx cortex-agents configure     # Pick your models interactively
 # Restart OpenCode - done.
 ```
 
-That's it. Your OpenCode session now has 7 specialized agents, 23 tools, and 14 domain skills.
+That's it. Your OpenCode session now has 8 specialized agents, 23 tools, and 14 domain skills.
 
 <br>
 
@@ -116,22 +116,33 @@ Handle complex, multi-step work. Use your best model.
 
 | Agent | Role | Superpower |
 |-------|------|-----------|
-| **build** | Full-access development | Two-step branching strategy, worktree launcher, task finalizer, docs prompting |
-| **plan** | Read-only analysis | Creates implementation plans with mermaid diagrams, hands off to build |
-| **debug** | Deep troubleshooting | Full bash/edit access with hotfix workflow |
+| **build** | Full-access development | Skill-aware implementation, worktree launcher, quality gates, task finalizer |
+| **plan** | Read-only analysis | Architectural plans with mermaid diagrams, NFR analysis, hands off to build |
+| **debug** | Deep troubleshooting | Performance debugging, distributed tracing, hotfix workflow |
+| **review** | Code quality assessment | Tech debt scoring, pattern review, refactoring advisor (read-only) |
 
 ### Subagents
 
-Focused specialists launched **automatically** as parallel quality gates. Use a fast/cheap model.
+Focused specialists launched **automatically** as parallel quality gates. Each auto-loads its core domain skill for deeper analysis. Use a fast/cheap model.
 
-| Agent | Role | Triggered By |
-|-------|------|-------------|
-| **@testing** | Writes tests, runs suite, reports coverage gaps | Build (always), Debug (always) |
-| **@security** | OWASP audit, secrets scan, severity-rated findings | Build (always), Debug (if security-relevant) |
-| **@fullstack** | End-to-end implementation + feasibility analysis | Build (multi-layer features), Plan (analysis) |
-| **@devops** | Config validation, CI/CD best practices | Build (when CI/Docker/infra files change) |
+| Agent | Role | Auto-Loads Skill | Triggered By |
+|-------|------|-----------------|-------------|
+| **@testing** | Writes tests, runs suite, reports coverage | `testing-strategies` | Build (always), Debug (always) |
+| **@security** | OWASP audit, secrets scan, code-level fix patches | `security-hardening` | Build (always), Debug (if security-relevant) |
+| **@fullstack** | Cross-layer implementation + feasibility analysis | Per-layer skills | Build (multi-layer features), Plan (analysis) |
+| **@devops** | CI/CD validation, IaC review, deployment strategy | `deployment-automation` | Build (when CI/Docker/infra files change) |
 
 Subagents return **structured reports** with severity levels (`BLOCKING`, `CRITICAL`, `HIGH`, `MEDIUM`, `LOW`) that the orchestrating agent uses to decide whether to proceed or fix issues first.
+
+### Skill Routing
+
+All agents detect the project's technology stack and **automatically load relevant skills** before working. This turns the 14 domain skills from passive knowledge into active intelligence:
+
+```
+Build Agent detects: package.json has React + Express + Prisma
+  → auto-loads: frontend-development, backend-development, database-design, api-design
+  → implements with deep framework-specific knowledge
+```
 
 <br>
 
@@ -352,9 +363,10 @@ When agents switch, a toast notification tells you what mode you're in:
 Agent: build                 Development mode - ready to implement
 Agent: plan                  Planning mode - read-only analysis
 Agent: debug                 Debug mode - troubleshooting and fixes
+Agent: review                Review mode - code quality assessment
 ```
 
-The Plan agent creates plans with mermaid diagrams and hands off to Build. Build loads the plan and implements it. If something breaks, Debug takes over with full access.
+The Plan agent creates plans with mermaid diagrams and hands off to Build. Build loads the plan, detects the tech stack, loads relevant skills, and implements. If something breaks, Debug takes over with performance debugging tools. Review provides code quality assessment and tech debt analysis on demand.
 
 <br>
 

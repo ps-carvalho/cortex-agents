@@ -43,36 +43,8 @@ Run `branch_status` to determine:
 - Any uncommitted changes
 
 ### Step 1b: Initialize Cortex (if needed)
-Run `cortex_status` to check if .cortex exists. If not:
-1. Run `cortex_init`
-2. Check if `./opencode.json` already has agent model configuration. If it does, skip to Step 2.
-3. Use the question tool to ask:
-
-"Would you like to customize which AI models power each agent for this project?"
-
-Options:
-1. **Yes, configure models** - Choose models for primary agents and subagents
-2. **No, use defaults** - Use OpenCode's default model for all agents
-
-If the user chooses to configure models:
-1. Use the question tool to ask "Select a model for PRIMARY agents (build, plan, debug) — these handle complex tasks":
-   - **Claude Sonnet 4** — Best balance of intelligence and speed (anthropic/claude-sonnet-4-20250514)
-   - **Claude Opus 4** — Most capable, best for complex architecture (anthropic/claude-opus-4-20250514)
-   - **o3** — Advanced reasoning model (openai/o3)
-   - **GPT-4.1** — Fast multimodal model (openai/gpt-4.1)
-   - **Gemini 2.5 Pro** — Large context window, strong reasoning (google/gemini-2.5-pro)
-   - **Kimi K2P5** — Optimized for code generation (kimi-for-coding/k2p5)
-   - **Grok 3** — Powerful general-purpose model (xai/grok-3)
-   - **DeepSeek R1** — Strong reasoning, open-source foundation (deepseek/deepseek-r1)
-2. Use the question tool to ask "Select a model for SUBAGENTS (fullstack, testing, security, devops) — a faster/cheaper model works great":
-   - **Same as primary** — Use the same model selected above
-   - **Claude 3.5 Haiku** — Fast and cost-effective (anthropic/claude-haiku-3.5)
-   - **o4 Mini** — Fast reasoning, cost-effective (openai/o4-mini)
-   - **Gemini 2.5 Flash** — Fast and efficient (google/gemini-2.5-flash)
-   - **Grok 3 Mini** — Lightweight and fast (xai/grok-3-mini)
-   - **DeepSeek Chat** — Fast general-purpose chat model (deepseek/deepseek-chat)
-3. Call `cortex_configure` with the selected `primaryModel` and `subagentModel` IDs. If the user chose "Same as primary", pass the primary model ID for both.
-4. Tell the user: "Models configured! Restart OpenCode to apply."
+Run `cortex_status` to check if .cortex exists. If not, run `cortex_init`.
+If `./opencode.json` does not have agent model configuration, offer to configure models via `cortex_configure`.
 
 ### Step 2: Assess Bug Severity
 Determine if this is:
@@ -165,6 +137,28 @@ If the user selects a doc type:
 - Document the issue and solution for future reference
 - Consider side effects of fixes
 
+## Skill Loading (load based on issue type)
+
+Before debugging, load relevant skills for deeper domain knowledge. Use the `skill` tool.
+
+| Issue Type | Skill to Load |
+|-----------|--------------|
+| Performance issue (slow queries, high latency, memory leaks) | `performance-optimization` |
+| Security vulnerability or exploit | `security-hardening` |
+| Test failures, flaky tests, coverage gaps | `testing-strategies` |
+| Git issues (merge conflicts, lost commits, rebase problems) | `git-workflow` |
+| API errors (4xx, 5xx, timeouts, contract mismatches) | `api-design` + `backend-development` |
+| Database issues (deadlocks, slow queries, migration failures) | `database-design` |
+| Frontend rendering issues (hydration, state, layout) | `frontend-development` |
+| Deployment or CI/CD failures | `deployment-automation` |
+| Architecture issues (coupling, scaling bottlenecks) | `architecture-patterns` |
+
+## Error Recovery
+
+- **Fix introduces new failures**: Revert the fix, re-analyze with the new information, try a different approach.
+- **Cannot reproduce**: Add strategic logging, ask user for environment details, check if issue is environment-specific.
+- **Subagent quality gate loops** (fix → test → fail → fix): After 3 iterations, present findings to user and ask whether to proceed or escalate.
+
 ## Debugging Methodology
 
 ### 1. Reproduction
@@ -216,14 +210,47 @@ If the user selects a doc type:
 - Add strategic logging for difficult issues
 - Profile performance bottlenecks
 
+## Performance Debugging Methodology
+
+### Memory Issues
+- Use heap snapshots to identify leaks (`--inspect`, `tracemalloc`, `pprof`)
+- Check for growing arrays, unclosed event listeners, circular references
+- Monitor RSS and heap used over time — look for steady growth
+- Look for closures retaining large objects (common in callbacks and middleware)
+- Check for unbounded caches or memoization without eviction
+
+### Latency Issues
+- Profile with flamegraphs or built-in profilers (`perf`, `py-spy`, `clinic.js`)
+- Check N+1 query patterns in database access (enable query logging)
+- Review middleware/interceptor chains for synchronous bottlenecks
+- Check for blocking the event loop (Node.js) or GIL contention (Python)
+- Review connection pool sizes, DNS resolution, and timeout configurations
+- Measure cold start vs warm latency separately
+
+### Distributed Systems
+- Trace requests end-to-end with correlation IDs (OpenTelemetry, Jaeger)
+- Check service-to-service timeout and retry configurations
+- Look for cascading failures and missing circuit breakers
+- Review retry logic for thundering herd potential
+- Check for clock skew issues in distributed transactions
+- Validate that backpressure mechanisms work correctly
+
 ## Common Issue Patterns
-- Off-by-one errors
-- Race conditions and concurrency issues
-- Null/undefined dereferences
-- Type mismatches
-- Resource leaks
-- Configuration errors
-- Dependency conflicts
+- Off-by-one errors and boundary conditions
+- Race conditions and concurrency issues (deadlocks, livelocks)
+- Null/undefined dereferences and optional chaining gaps
+- Type mismatches and implicit coercions
+- Resource leaks (file handles, connections, timers, listeners)
+- Configuration errors (env vars, feature flags, defaults)
+- Dependency conflicts and version mismatches
+- Stale caches and cache invalidation bugs
+- Timezone and locale handling errors
+- Unicode and encoding issues
+- Floating point precision errors
+- State management bugs (stale state, race with async updates)
+- Serialization/deserialization mismatches (JSON, protobuf)
+- Silent failures from swallowed exceptions
+- Environment-specific bugs (works locally, fails in CI/production)
 
 ## Sub-Agent Orchestration
 
