@@ -16,6 +16,8 @@ tools:
   worktree_remove: true
   worktree_open: true
   worktree_launch: true
+  detect_environment: true
+  get_environment_info: true
   branch_create: true
   branch_status: true
   branch_switch: true
@@ -80,15 +82,15 @@ After implementing the fix, launch sub-agents for validation. **Use the Task too
 
 **Always launch:**
 
-1. **@testing sub-agent** — Provide:
+1. **@qa sub-agent** — Provide:
    - The file(s) you modified to fix the bug
    - Description of the bug (root cause) and the fix applied
    - The test framework used in the project
    - Ask it to: write a regression test that would have caught this bug, verify the fix doesn't break existing tests, report results
 
-**Conditionally launch (in parallel with @testing if applicable):**
+**Conditionally launch (in parallel with @qa if applicable):**
 
-2. **@security sub-agent** — Launch if the bug or fix involves ANY of:
+2. **@guard sub-agent** — Launch if the bug or fix involves ANY of:
    - Authentication, authorization, or session management
    - Input validation or output encoding
    - Cryptography, hashing, or secrets
@@ -99,8 +101,8 @@ After implementing the fix, launch sub-agents for validation. **Use the Task too
 
 **After sub-agents return:**
 
-- **@testing results**: Incorporate the regression test. If any `[BLOCKING]` issues exist (test revealing the fix is incomplete), address them before proceeding.
-- **@security results**: If `CRITICAL` or `HIGH` findings exist, fix them before proceeding. Note any `MEDIUM` findings.
+- **@qa results**: Incorporate the regression test. If any `[BLOCKING]` issues exist (test revealing the fix is incomplete), address them before proceeding.
+- **@guard results**: If `CRITICAL` or `HIGH` findings exist, fix them before proceeding. Note any `MEDIUM` findings.
 
 Proceed to Step 7 only when the quality gate passes.
 
@@ -258,8 +260,8 @@ The following sub-agents are available via the Task tool. **Launch multiple sub-
 
 | Sub-Agent | Trigger | What It Does | When to Use |
 |-----------|---------|--------------|-------------|
-| `@testing` | **Always** after fix | Writes regression test, validates existing tests | Step 6 — mandatory |
-| `@security` | Fix touches auth/crypto/input validation/SQL/commands | Security audit of the fix | Step 6 — conditional |
+| `@qa` | **Always** after fix | Writes regression test, validates existing tests | Step 6 — mandatory |
+| `@guard` | Fix touches auth/crypto/input validation/SQL/commands | Security audit of the fix | Step 6 — conditional |
 
 ### How to Launch Sub-Agents
 
@@ -267,10 +269,10 @@ Use the **Task tool** with `subagent_type` set to the agent name. Example:
 
 ```
 # Mandatory: always after fix
-Task(subagent_type="testing", prompt="Bug: [description]. Fix: [what was changed]. Files modified: [list]. Write a regression test and verify existing tests pass.")
+Task(subagent_type="qa", prompt="Bug: [description]. Fix: [what was changed]. Files modified: [list]. Write a regression test and verify existing tests pass.")
 
 # Conditional: only if security-relevant
-Task(subagent_type="security", prompt="Bug: [description]. Fix: [what was changed]. Files: [list]. Audit the fix for security vulnerabilities.")
+Task(subagent_type="guard", prompt="Bug: [description]. Fix: [what was changed]. Files: [list]. Audit the fix for security vulnerabilities.")
 ```
 
 Both can execute in parallel when launched in the same message.

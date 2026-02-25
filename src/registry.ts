@@ -125,10 +125,10 @@ export const MODEL_REGISTRY: ModelEntry[] = [
 ];
 
 /** Primary agents receive the best available model */
-export const PRIMARY_AGENTS = ["build", "plan", "debug", "review"] as const;
+export const PRIMARY_AGENTS = ["implement", "architect", "fix", "audit"] as const;
 
 /** Subagents receive a fast/cost-effective model */
-export const SUBAGENTS = ["fullstack", "testing", "security", "devops"] as const;
+export const SUBAGENTS = ["crosslayer", "qa", "guard", "ship"] as const;
 
 /** All agent names combined */
 export const ALL_AGENTS = [...PRIMARY_AGENTS, ...SUBAGENTS] as const;

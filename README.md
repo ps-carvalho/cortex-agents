@@ -43,7 +43,7 @@ npx cortex-agents configure     # Pick your models interactively
 # Restart OpenCode - done.
 ```
 
-That's it. Your OpenCode session now has 8 specialized agents, 23 tools, and 14 domain skills.
+That's it. Your OpenCode session now has 8 specialized agents, 25 tools, and 14 domain skills.
 
 <br>
 
@@ -56,10 +56,10 @@ Cortex agents follow a structured workflow from planning through to PR:
 ```
 You: "Add user authentication"
 
-Plan Agent                              reads codebase, creates plan with mermaid diagrams
-   saves to .cortex/plans/             "Plan saved. Switch to Build?"
+Architect Agent                         reads codebase, creates plan with mermaid diagrams
+   saves to .cortex/plans/             "Plan saved. Switch to Implement?"
 
-Build Agent                             loads plan, checks git status
+Implement Agent                         loads plan, checks git status
    "You're on main. Create a branch     two-step prompt: strategy -> execution
     or worktree?"
    creates feature/user-auth            implements following the plan
@@ -72,13 +72,19 @@ Create isolated development environments and launch them instantly:
 
 | Mode | What Happens |
 |------|-------------|
+| **IDE Terminal** | Opens in your detected IDE (VS Code, Cursor, Windsurf, Zed) with integrated terminal |
 | **New Terminal** | Opens a new terminal tab with OpenCode pre-configured in the worktree |
 | **In-App PTY** | Spawns an embedded terminal inside your current OpenCode session |
 | **Background** | AI implements headlessly while you keep working - toast notifications on completion |
 
 Plans are automatically propagated into the worktree's `.cortex/plans/` so the new session has full context.
 
-**Cross-platform terminal support** via the terminal driver system — automatically detects and integrates with tmux, iTerm2, Terminal.app, kitty, wezterm, Konsole, and GNOME Terminal. Tabs opened by the launcher are tracked and automatically closed when the worktree is removed.
+**IDE-Aware Launch Options** — The launcher detects your development environment and offers contextual options:
+- **VS Code / Cursor / Windsurf / Zed**: "Open in [IDE] (Recommended)" as the first option
+- **JetBrains IDEs**: Terminal tab with manual IDE opening instructions
+- **Terminal only**: Standard terminal tab options
+
+**Cross-platform terminal support** via the terminal driver system — automatically detects and integrates with VS Code, Cursor, Windsurf, Zed, JetBrains IDEs, tmux, iTerm2, Terminal.app, kitty, wezterm, Konsole, and GNOME Terminal. Tabs opened by the launcher are tracked and automatically closed when the worktree is removed.
 
 ### Task Finalizer
 
@@ -116,10 +122,10 @@ Handle complex, multi-step work. Use your best model.
 
 | Agent | Role | Superpower |
 |-------|------|-----------|
-| **build** | Full-access development | Skill-aware implementation, worktree launcher, quality gates, task finalizer |
-| **plan** | Read-only analysis | Architectural plans with mermaid diagrams, NFR analysis, hands off to build |
-| **debug** | Deep troubleshooting | Performance debugging, distributed tracing, hotfix workflow |
-| **review** | Code quality assessment | Tech debt scoring, pattern review, refactoring advisor (read-only) |
+| **implement** | Full-access development | Skill-aware implementation, worktree launcher, quality gates, task finalizer |
+| **architect** | Read-only analysis | Architectural plans with mermaid diagrams, NFR analysis, hands off to implement |
+| **fix** | Deep troubleshooting | Performance debugging, distributed tracing, hotfix workflow |
+| **audit** | Code quality assessment | Tech debt scoring, pattern review, refactoring advisor (read-only) |
 
 ### Subagents
 
@@ -127,10 +133,10 @@ Focused specialists launched **automatically** as parallel quality gates. Each a
 
 | Agent | Role | Auto-Loads Skill | Triggered By |
 |-------|------|-----------------|-------------|
-| **@testing** | Writes tests, runs suite, reports coverage | `testing-strategies` | Build (always), Debug (always) |
-| **@security** | OWASP audit, secrets scan, code-level fix patches | `security-hardening` | Build (always), Debug (if security-relevant) |
-| **@fullstack** | Cross-layer implementation + feasibility analysis | Per-layer skills | Build (multi-layer features), Plan (analysis) |
-| **@devops** | CI/CD validation, IaC review, deployment strategy | `deployment-automation` | Build (when CI/Docker/infra files change) |
+| **@qa** | Writes tests, runs suite, reports coverage | `testing-strategies` | Implement (always), Fix (always) |
+| **@guard** | OWASP audit, secrets scan, code-level fix patches | `security-hardening` | Implement (always), Fix (if security-relevant) |
+| **@crosslayer** | Cross-layer implementation + feasibility analysis | Per-layer skills | Implement (multi-layer features), Architect (analysis) |
+| **@ship** | CI/CD validation, IaC review, deployment strategy | `deployment-automation` | Implement (when CI/Docker/infra files change) |
 
 Subagents return **structured reports** with severity levels (`BLOCKING`, `CRITICAL`, `HIGH`, `MEDIUM`, `LOW`) that the orchestrating agent uses to decide whether to proceed or fix issues first.
 
@@ -139,7 +145,7 @@ Subagents return **structured reports** with severity levels (`BLOCKING`, `CRITI
 All agents detect the project's technology stack and **automatically load relevant skills** before working. This turns the 14 domain skills from passive knowledge into active intelligence:
 
 ```
-Build Agent detects: package.json has React + Express + Prisma
+Implement Agent detects: package.json has React + Express + Prisma
   → auto-loads: frontend-development, backend-development, database-design, api-design
   → implements with deep framework-specific knowledge
 ```
@@ -148,7 +154,7 @@ Build Agent detects: package.json has React + Express + Prisma
 
 ## Tools
 
-23 tools bundled and auto-registered. No configuration needed.
+25 tools bundled and auto-registered. No configuration needed.
 
 <table>
 <tr><td width="50%">
@@ -167,6 +173,7 @@ Build Agent detects: package.json has React + Express + Prisma
 - `plan_save` / `plan_load` / `plan_list` / `plan_delete`
 - `session_save` / `session_list` / `session_load`
 - `cortex_init` / `cortex_status` / `cortex_configure`
+- `detect_environment` - Detect IDE/terminal for contextual launch options
 
 </td></tr>
 <tr><td width="50%">
@@ -273,7 +280,7 @@ Per-project config takes priority. Team members get the same model settings when
 your-project/
   .cortex/                     Project context (auto-initialized)
      config.json              Configuration
-     plans/                   Implementation plans (git tracked)
+     plans/                   Implementation plans (gitignored)
      sessions/                Session summaries (gitignored)
   .opencode/
      models.json              Per-project model config (git tracked)
@@ -305,9 +312,9 @@ npx cortex-agents status                       # Show installation and model sta
 
 ## How It Works
 
-### The Build Agent Workflow
+### The Implement Agent Workflow
 
-Every time the build agent starts, it follows a structured pre-implementation checklist:
+Every time the implement agent starts, it follows a structured pre-implementation checklist:
 
 ```
 Step 1   branch_status           Am I on a protected branch?
@@ -317,7 +324,7 @@ Step 4   Ask: strategy           Worktree (recommended) or branch?
 Step 4b  Ask: launch mode        Terminal tab (recommended) / stay / PTY / background?
 Step 5   Execute                 Create worktree/branch, auto-detect terminal
 Step 6   Implement               Write code following the plan
-Step 7   Quality Gate            Launch @testing + @security in parallel
+Step 7   Quality Gate            Launch @qa + @guard in parallel
 Step 8   Ask: documentation      Decision doc / feature doc / flow doc?
 Step 9   session_save            Record what was done and why
 Step 10  task_finalize           Commit, push, create PR
@@ -328,27 +335,27 @@ This isn't just documentation - it's enforced by the agent's instructions. The A
 
 ### Sub-Agent Quality Gates
 
-After implementation (Step 7), the build agent **automatically** launches sub-agents in parallel as quality gates:
+After implementation (Step 7), the implement agent **automatically** launches sub-agents in parallel as quality gates:
 
 ```
-Build Agent completes implementation
+Implement Agent completes implementation
    |
    +-- launches in parallel (single message) --+
    |                                            |
    v                                            v
-@testing                                   @security
+@qa                                        @guard
   Writes unit tests                          OWASP audit
   Runs test suite                            Secrets scan
   Reports coverage                           Severity ratings
   Returns: PASS/FAIL                         Returns: PASS/FAIL
    |                                            |
-   +-------- results reviewed by Build ---------+
+   +------ results reviewed by Implement ------+
    |
    v
 Quality Gate Summary included in PR body
 ```
 
-The debug agent uses the same pattern: `@testing` for regression tests (always) and `@security` when the fix touches sensitive code.
+The fix agent uses the same pattern: `@qa` for regression tests (always) and `@guard` when the fix touches sensitive code.
 
 Sub-agents use **structured return contracts** so results are actionable:
 - `BLOCKING` / `CRITICAL` / `HIGH` findings block finalization
@@ -360,13 +367,13 @@ Sub-agents use **structured return contracts** so results are actionable:
 When agents switch, a toast notification tells you what mode you're in:
 
 ```
-Agent: build                 Development mode - ready to implement
-Agent: plan                  Planning mode - read-only analysis
-Agent: debug                 Debug mode - troubleshooting and fixes
-Agent: review                Review mode - code quality assessment
+Agent: implement              Development mode - ready to implement
+Agent: architect             Planning mode - read-only analysis
+Agent: fix                   Debug mode - troubleshooting and fixes
+Agent: audit                 Review mode - code quality assessment
 ```
 
-The Plan agent creates plans with mermaid diagrams and hands off to Build. Build loads the plan, detects the tech stack, loads relevant skills, and implements. If something breaks, Debug takes over with performance debugging tools. Review provides code quality assessment and tech debt analysis on demand.
+The Architect agent creates plans with mermaid diagrams and hands off to Implement. Implement loads the plan, detects the tech stack, loads relevant skills, and implements. If something breaks, Fix takes over with performance debugging tools. Audit provides code quality assessment and tech debt analysis on demand.
 
 <br>
 

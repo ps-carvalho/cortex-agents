@@ -8,17 +8,19 @@ import * as plan from "./tools/plan";
 import * as session from "./tools/session";
 import * as docs from "./tools/docs";
 import * as task from "./tools/task";
+import * as environment from "./tools/environment";
 
 // ─── Agent Descriptions (for handover toasts) ───────────────────────────────
 
 const AGENT_DESCRIPTIONS: Record<string, string> = {
-  build: "Development mode — ready to implement",
-  plan: "Planning mode — read-only analysis",
-  debug: "Debug mode — troubleshooting and fixes",
-  fullstack: "Fullstack subagent — end-to-end implementation",
-  testing: "Testing subagent — writing tests",
-  security: "Security subagent — vulnerability audit",
-  devops: "DevOps subagent — CI/CD and deployment",
+  implement: "Development mode — ready to implement",
+  architect: "Planning mode — read-only analysis",
+  fix: "Debug mode — troubleshooting and fixes",
+  audit: "Review mode — code quality assessment",
+  crosslayer: "Crosslayer subagent — end-to-end implementation",
+  qa: "QA subagent — writing tests",
+  guard: "Security subagent — vulnerability audit",
+  ship: "DevOps subagent — CI/CD and deployment",
 };
 
 // ─── Tool Notification Config ────────────────────────────────────────────────
@@ -184,6 +186,10 @@ export const CortexPlugin: Plugin = async (ctx) => {
 
       // Task tools - finalize workflow (commit, push, PR)
       task_finalize: task.finalize,
+
+      // Environment tools - IDE/terminal detection for contextual options
+      detect_environment: environment.detectEnvironment,
+      get_environment_info: environment.getEnvironmentInfo,
     },
 
     // ── Post-execution toast notifications ────────────────────────────────

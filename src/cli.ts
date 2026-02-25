@@ -12,7 +12,7 @@ import {
   getSubagentChoices,
 } from "./registry.js";
 
-const VERSION = "2.3.0";
+const VERSION = "3.2.0";
 const PLUGIN_NAME = "cortex-agents";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -234,6 +234,7 @@ function install(): void {
     const newConfig: OpencodeConfig = {
       $schema: "https://opencode.ai/config.json",
       plugin: [PLUGIN_NAME],
+      defaultAgent: "architect",
     };
     writeConfig(globalPath, newConfig);
     console.log(`Created config: ${globalPath}`);
@@ -354,6 +355,11 @@ async function configure(): Promise<void> {
     config.plugin.push(PLUGIN_NAME);
   }
 
+  // Set default agent to architect (planning-first workflow)
+  if (!config.defaultAgent) {
+    config.defaultAgent = "architect";
+  }
+
   // ── Primary model selection ────────────────────────────────
   const { primary, subagent } = await promptModelSelection();
 
@@ -362,6 +368,13 @@ async function configure(): Promise<void> {
     // Per-project: write .opencode/models.json + sync to local opencode.json
     writeProjectModels(primary, subagent);
     syncProjectModelsToConfig();
+
+    // Ensure default agent is set in local opencode.json
+    const localConfig = readConfig(path.join(process.cwd(), "opencode.json"));
+    if (!localConfig.defaultAgent) {
+      localConfig.defaultAgent = "architect";
+      writeConfig(path.join(process.cwd(), "opencode.json"), localConfig);
+    }
 
     const modelsPath = getProjectModelsPath();
     const localConfigPath = path.join(process.cwd(), "opencode.json");
@@ -421,7 +434,7 @@ async function promptModelSelection(): Promise<{
   });
 
   console.log(
-    "Primary agents (build, plan, debug, review) handle complex tasks.\nUse your best available model.\n"
+    "Primary agents (implement, architect, fix, audit) handle complex tasks.\nUse your best available model.\n"
   );
 
   const { primaryModel } = await prompts({
@@ -464,7 +477,7 @@ async function promptModelSelection(): Promise<{
   });
 
   console.log(
-    "Subagents (fullstack, testing, security, devops) handle focused tasks.\nA faster/cheaper model works great here.\n"
+    "Subagents (crosslayer, qa, guard, ship) handle focused tasks.\nA faster/cheaper model works great here.\n"
   );
 
   const { subagentModel } = await prompts({
@@ -717,18 +730,20 @@ EXAMPLES:
   npx ${PLUGIN_NAME} status                     # Check status
 
 AGENTS:
-  Primary (build, plan, debug, review):
+  Primary (implement, architect, fix, audit):
     Handle complex tasks — select your best model.
 
-  Subagents (fullstack, testing, security, devops):
+  Subagents (crosslayer, qa, guard, ship):
     Handle focused tasks — a fast/cheap model works great.
 
-TOOLS (23):
+TOOLS (25):
   cortex_init, cortex_status      .cortex directory management
   cortex_configure                Per-project model configuration
   worktree_create, worktree_list  Git worktree management
   worktree_remove, worktree_open
   worktree_launch                 Launch worktree (terminal/PTY/background)
+  detect_environment              Detect IDE/terminal for launch options
+  get_environment_info            Quick environment info for agents
   branch_create, branch_status    Git branch operations
   branch_switch
   plan_save, plan_list            Plan persistence

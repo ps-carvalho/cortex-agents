@@ -32,7 +32,7 @@ export interface TerminalSession {
   ptyId?: string; // OpenCode PTY session ID
 
   // Metadata
-  mode: "terminal" | "pty" | "background";
+  mode: "terminal" | "pty" | "background" | "ide";
   branch: string;
   agent: string;
   worktreePath: string;
@@ -91,7 +91,11 @@ export function readSession(
 // ─── Helper: build the shell command for the new tab ─────────────────────────
 
 function buildTabCommand(opts: TabOpenOptions): string {
-  return `cd "${opts.worktreePath}" && "${opts.opencodeBin}" --agent ${opts.agent}`;
+  // Escape all user-controlled inputs to prevent command injection
+  const safePath = shellEscape(opts.worktreePath);
+  const safeBin = shellEscape(opts.opencodeBin);
+  const safeAgent = shellEscape(opts.agent);
+  return `cd "${safePath}" && "${safeBin}" --agent "${safeAgent}"`;
 }
 
 // ─── Helper: safe process kill ───────────────────────────────────────────────
@@ -109,7 +113,196 @@ function killPid(pid: number): boolean {
 // Driver Implementations
 // ═════════════════════════════════════════════════════════════════════════════
 
-// ─── tmux (multiplexer — highest priority) ───────────────────────────────────
+// ─── IDE Drivers (highest priority — prefer integrated terminals) ────────────
+
+/**
+ * Base class for IDE drivers that use CLI commands to open windows.
+ * IDEs don't support programmatic closing, so closeTab returns false.
+ */
+abstract class IDEDriver implements TerminalDriver {
+  abstract readonly name: string;
+  abstract readonly cliBinary: string;
+  abstract readonly envVars: string[];
+
+  abstract detect(): boolean;
+
+  async openTab(opts: TabOpenOptions): Promise<Partial<TerminalSession>> {
+    const cliAvailable = await which(this.cliBinary);
+    if (!cliAvailable) {
+      throw new Error(`${this.name} CLI not found. Install the \`${this.cliBinary}\` command.`);
+    }
+
+    // Open the worktree in a new IDE window
+    // The integrated terminal will automatically be available
+    try {
+      await exec(this.cliBinary, ["--new-window", opts.worktreePath]);
+      return {
+        sessionId: `${this.name}-${opts.branchName}`,
+      };
+    } catch {
+      // Some IDEs don't support --new-window, try without
+      try {
+        await exec(this.cliBinary, [opts.worktreePath]);
+        return {
+          sessionId: `${this.name}-${opts.branchName}`,
+        };
+      } catch {
+        throw new Error(`Failed to open ${this.name} window`);
+      }
+    }
+  }
+
+  async closeTab(session: TerminalSession): Promise<boolean> {
+    // IDEs don't support programmatic tab/window closing via CLI
+    // Return false to indicate we couldn't close it
+    return false;
+  }
+}
+
+// ─── VS Code ─────────────────────────────────────────────────────────────────
+
+class VSCodeDriver extends IDEDriver {
+  readonly name = "vscode";
+  readonly cliBinary = "code";
+  readonly envVars = ["VSCODE_PID", "VSCODE_CWD"];
+
+  detect(): boolean {
+    return !!process.env.VSCODE_PID ||
+           !!process.env.VSCODE_CWD ||
+           process.env.TERM_PROGRAM === "vscode";
+  }
+
+  async openTab(opts: TabOpenOptions): Promise<Partial<TerminalSession>> {
+    const cliAvailable = await which(this.cliBinary);
+    if (!cliAvailable) {
+      throw new Error("VS Code CLI not found. Install the `code` command via VS Code's Command Palette (Cmd+Shift+P → 'Shell Command: Install code command in PATH')");
+    }
+
+    try {
+      // Open in new window with the worktree folder
+      await exec(this.cliBinary, ["--new-window", opts.worktreePath]);
+      return {
+        sessionId: `vscode-${opts.branchName}`,
+      };
+    } catch {
+      throw new Error("Failed to open VS Code window");
+    }
+  }
+}
+
+// ─── Cursor ──────────────────────────────────────────────────────────────────
+
+class CursorDriver extends IDEDriver {
+  readonly name = "cursor";
+  readonly cliBinary = "cursor";
+  readonly envVars = ["CURSOR_TRACE_ID", "CURSOR_SHELL_VERSION"];
+
+  detect(): boolean {
+    return !!process.env.CURSOR_TRACE_ID ||
+           !!process.env.CURSOR_SHELL_VERSION;
+  }
+}
+
+// ─── Windsurf ────────────────────────────────────────────────────────────────
+
+class WindsurfDriver extends IDEDriver {
+  readonly name = "windsurf";
+  readonly cliBinary = "windsurf";
+  readonly envVars = ["WINDSURF_PARENT_PROCESS", "WINDSURF_EDITOR"];
+
+  detect(): boolean {
+    return !!process.env.WINDSURF_PARENT_PROCESS ||
+           !!process.env.WINDSURF_EDITOR;
+  }
+
+  async openTab(opts: TabOpenOptions): Promise<Partial<TerminalSession>> {
+    const cliAvailable = await which(this.cliBinary);
+    if (!cliAvailable) {
+      throw new Error("Windsurf CLI not found. Ensure Windsurf is installed and the `windsurf` command is in PATH.");
+    }
+
+    // Windsurf may not support --new-window, try direct path
+    try {
+      await exec(this.cliBinary, [opts.worktreePath]);
+      return {
+        sessionId: `windsurf-${opts.branchName}`,
+      };
+    } catch {
+      throw new Error("Failed to open Windsurf window");
+    }
+  }
+}
+
+// ─── Zed ─────────────────────────────────────────────────────────────────────
+
+class ZedDriver extends IDEDriver {
+  readonly name = "zed";
+  readonly cliBinary = "zed";
+  readonly envVars = ["ZED_TERM"];
+
+  detect(): boolean {
+    return !!process.env.ZED_TERM || process.env.TERM_PROGRAM === "zed";
+  }
+
+  async openTab(opts: TabOpenOptions): Promise<Partial<TerminalSession>> {
+    const cliAvailable = await which(this.cliBinary);
+    if (!cliAvailable) {
+      throw new Error("Zed CLI not found. Ensure Zed is installed and the `zed` command is in PATH.");
+    }
+
+    try {
+      await exec(this.cliBinary, [opts.worktreePath]);
+      return {
+        sessionId: `zed-${opts.branchName}`,
+      };
+    } catch {
+      throw new Error("Failed to open Zed window");
+    }
+  }
+}
+
+// ─── JetBrains IDEs ──────────────────────────────────────────────────────────
+
+class JetBrainsDriver implements TerminalDriver {
+  readonly name = "jetbrains";
+
+  detect(): boolean {
+    const env = process.env.TERMINAL_EMULATOR || "";
+    return env.includes("JetBrains") || !!process.env.JETBRAINS_IDE;
+  }
+
+  async openTab(opts: TabOpenOptions): Promise<Partial<TerminalSession>> {
+    // JetBrains IDEs don't have a universal CLI for opening folders
+    // We'll try common JetBrains CLI tools
+    const jetbrainsClis = ["idea", "webstorm", "pycharm", "goland", "clion", "rustrover"];
+
+    for (const cli of jetbrainsClis) {
+      const cliAvailable = await which(cli);
+      if (cliAvailable) {
+        try {
+          await exec(cli, [opts.worktreePath]);
+          return {
+            sessionId: `jetbrains-${opts.branchName}`,
+          };
+        } catch {
+          continue;
+        }
+      }
+    }
+
+    throw new Error(
+      "JetBrains IDE CLI not found. Open the worktree manually in your JetBrains IDE:\n" +
+      `  File → Open → ${opts.worktreePath}`
+    );
+  }
+
+  async closeTab(session: TerminalSession): Promise<boolean> {
+    // JetBrains IDEs don't support programmatic closing
+    return false;
+  }
+}
+
+// ─── tmux (multiplexer — highest priority among terminals) ───────────────────
 
 class TmuxDriver implements TerminalDriver {
   readonly name = "tmux";
@@ -656,17 +849,28 @@ class FallbackDriver implements TerminalDriver {
 /**
  * Ordered list of terminal drivers. Detection runs first-to-last.
  *
- * Priority: multiplexers first (tmux), then terminal emulators, then fallback.
- * This ensures that if the user is in tmux inside iTerm2, we open a tmux window.
+ * Priority: IDEs first (vscode, cursor, windsurf), then multiplexers (tmux),
+ * then terminal emulators, then fallback.
+ * This ensures that if the user is in VS Code's terminal, we offer to open
+ * in VS Code rather than a standalone terminal.
  */
 const DRIVERS: TerminalDriver[] = [
+  // IDE drivers - highest priority (prefer integrated terminals)
+  new VSCodeDriver(),
+  new CursorDriver(),
+  new WindsurfDriver(),
+  new ZedDriver(),
+  new JetBrainsDriver(),
+  // Multiplexer
   new TmuxDriver(),
+  // Terminal emulators
   new ITerm2Driver(),
   new TerminalAppDriver(),
   new KittyDriver(),
   new WeztermDriver(),
   new KonsoleDriver(),
   new GnomeTerminalDriver(),
+  // Fallback
   new FallbackDriver(),
 ];
 
@@ -702,7 +906,7 @@ export function getDriverByName(name: string): TerminalDriver | null {
  * This is the main entry point for worktree_remove cleanup.
  */
 export async function closeSession(session: TerminalSession): Promise<boolean> {
-  if (session.mode === "terminal") {
+  if (session.mode === "terminal" || session.mode === "ide") {
     const driver = getDriverByName(session.terminal);
     if (driver) {
       const closed = await driver.closeTab(session);
@@ -713,4 +917,87 @@ export async function closeSession(session: TerminalSession): Promise<boolean> {
   // Universal fallback: kill PID
   if (session.pid) return killPid(session.pid);
   return false;
+}
+
+// ─── IDE Detection Helpers ───────────────────────────────────────────────────
+
+/**
+ * Check if a given driver is an IDE driver (VS Code, Cursor, Windsurf, Zed, JetBrains).
+ * Used to determine whether to attempt a fallback when the IDE CLI is unavailable.
+ */
+export function isIDEDriver(driver: TerminalDriver): boolean {
+  return driver instanceof IDEDriver || driver instanceof JetBrainsDriver;
+}
+
+/**
+ * Detect the first non-IDE terminal driver that matches the environment.
+ * Used as a fallback when the IDE CLI is not available (e.g., `code` not in PATH).
+ *
+ * Skips IDE drivers and JetBrains, tries tmux, iTerm2, Terminal.app, kitty, etc.
+ * Returns null if no terminal driver matches (only fallback driver left).
+ */
+export function detectFallbackDriver(): TerminalDriver | null {
+  for (const driver of DRIVERS) {
+    // Skip IDE drivers — we want a real terminal emulator
+    if (driver instanceof IDEDriver || driver instanceof JetBrainsDriver) continue;
+    // Skip the generic fallback — prefer a specific driver
+    if (driver instanceof FallbackDriver) continue;
+    if (driver.detect()) return driver;
+  }
+  // If no specific terminal detected, use the fallback driver
+  return new FallbackDriver();
+}
+
+/**
+ * Check if we're currently inside an IDE's integrated terminal.
+ * Returns the IDE driver if detected, null otherwise.
+ */
+export function detectIDE(): TerminalDriver | null {
+  for (const driver of DRIVERS) {
+    // IDE drivers are VSCodeDriver, CursorDriver, WindsurfDriver, etc.
+    // They come before TmuxDriver in the array
+    if (driver instanceof IDEDriver && driver.detect()) {
+      return driver;
+    }
+    // Also check JetBrains separately (not an IDEDriver subclass)
+    if (driver instanceof JetBrainsDriver && driver.detect()) {
+      return driver;
+    }
+  }
+  return null;
+}
+
+/**
+ * Check if a specific IDE's CLI is available on the system.
+ */
+export async function isIDECliAvailable(ideName: string): Promise<boolean> {
+  const cliMap: Record<string, string> = {
+    vscode: "code",
+    cursor: "cursor",
+    windsurf: "windsurf",
+    zed: "zed",
+    jetbrains: "idea", // or webstorm, pycharm, etc.
+  };
+
+  const cli = cliMap[ideName];
+  if (!cli) return false;
+
+  return !!(await which(cli));
+}
+
+/**
+ * Get a list of all available IDE CLIs on the system.
+ * Useful for offering launch options.
+ */
+export async function getAvailableIDEs(): Promise<string[]> {
+  const ides = ["vscode", "cursor", "windsurf", "zed"];
+  const available: string[] = [];
+
+  for (const ide of ides) {
+    if (await isIDECliAvailable(ide)) {
+      available.push(ide);
+    }
+  }
+
+  return available;
 }
