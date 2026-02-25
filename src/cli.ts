@@ -421,7 +421,7 @@ async function promptModelSelection(): Promise<{
   });
 
   console.log(
-    "Primary agents (build, plan, debug) handle complex tasks.\nUse your best available model.\n"
+    "Primary agents (build, plan, debug, review) handle complex tasks.\nUse your best available model.\n"
   );
 
   const { primaryModel } = await prompts({
@@ -717,7 +717,7 @@ EXAMPLES:
   npx ${PLUGIN_NAME} status                     # Check status
 
 AGENTS:
-  Primary (build, plan, debug):
+  Primary (build, plan, debug, review):
     Handle complex tasks — select your best model.
 
   Subagents (fullstack, testing, security, devops):

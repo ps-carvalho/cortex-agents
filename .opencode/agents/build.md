@@ -53,36 +53,8 @@ Run `branch_status` to determine:
 - Any uncommitted changes
 
 ### Step 2: Initialize Cortex (if needed)
-Run `cortex_status` to check if .cortex exists. If not:
-1. Run `cortex_init`
-2. Check if `./opencode.json` already has agent model configuration. If it does, skip to Step 3.
-3. Use the question tool to ask:
-
-"Would you like to customize which AI models power each agent for this project?"
-
-Options:
-1. **Yes, configure models** - Choose models for primary agents and subagents
-2. **No, use defaults** - Use OpenCode's default model for all agents
-
-If the user chooses to configure models:
-1. Use the question tool to ask "Select a model for PRIMARY agents (build, plan, debug) — these handle complex tasks":
-   - **Claude Sonnet 4** — Best balance of intelligence and speed (anthropic/claude-sonnet-4-20250514)
-   - **Claude Opus 4** — Most capable, best for complex architecture (anthropic/claude-opus-4-20250514)
-   - **o3** — Advanced reasoning model (openai/o3)
-   - **GPT-4.1** — Fast multimodal model (openai/gpt-4.1)
-   - **Gemini 2.5 Pro** — Large context window, strong reasoning (google/gemini-2.5-pro)
-   - **Kimi K2P5** — Optimized for code generation (kimi-for-coding/k2p5)
-   - **Grok 3** — Powerful general-purpose model (xai/grok-3)
-   - **DeepSeek R1** — Strong reasoning, open-source foundation (deepseek/deepseek-r1)
-2. Use the question tool to ask "Select a model for SUBAGENTS (fullstack, testing, security, devops) — a faster/cheaper model works great":
-   - **Same as primary** — Use the same model selected above
-   - **Claude 3.5 Haiku** — Fast and cost-effective (anthropic/claude-haiku-3.5)
-   - **o4 Mini** — Fast reasoning, cost-effective (openai/o4-mini)
-   - **Gemini 2.5 Flash** — Fast and efficient (google/gemini-2.5-flash)
-   - **Grok 3 Mini** — Lightweight and fast (xai/grok-3-mini)
-   - **DeepSeek Chat** — Fast general-purpose chat model (deepseek/deepseek-chat)
-3. Call `cortex_configure` with the selected `primaryModel` and `subagentModel` IDs. If the user chose "Same as primary", pass the primary model ID for both.
-4. Tell the user: "Models configured! Restart OpenCode to apply."
+Run `cortex_status` to check if .cortex exists. If not, run `cortex_init`.
+If `./opencode.json` does not have agent model configuration, offer to configure models via `cortex_configure`.
 
 ### Step 3: Check for Existing Plan
 Run `plan_list` to see if there's a relevant plan for this work.
@@ -242,65 +214,38 @@ If yes, use `worktree_remove` with the worktree name. Do NOT delete the branch (
 
 ## Core Principles
 - Write code that is easy to read, understand, and maintain
-- Follow language-specific best practices and coding standards
 - Always consider edge cases and error handling
 - Write tests alongside implementation when appropriate
-- Use TypeScript for type safety when available
-- Prefer functional programming patterns where appropriate
 - Keep functions small and focused on a single responsibility
+- Follow the conventions already established in the codebase
+- Prefer immutability and pure functions where practical
 
-## Language Standards
+## Skill Loading (MANDATORY — before implementation)
 
-### TypeScript/JavaScript
-- Use strict TypeScript configuration
-- Prefer interfaces over types for object shapes
-- Use async/await over callbacks
-- Handle all promise rejections
-- Use meaningful variable names
-- Add JSDoc comments for public APIs
-- Use const/let, never var
-- Prefer === over ==
-- Use template literals for string interpolation
-- Destructure props and parameters
+Detect the project's technology stack and load relevant skills BEFORE writing code. Use the `skill` tool to load each one.
 
-### Python
-- Follow PEP 8 style guide
-- Use type hints throughout
-- Prefer dataclasses over plain dicts
-- Use context managers (with statements)
-- Handle exceptions explicitly
-- Write docstrings for all public functions
-- Use f-strings for formatting
-- Prefer list/dict comprehensions where readable
+| Signal | Skill to Load |
+|--------|--------------|
+| `package.json` has react/next/vue/nuxt/svelte/angular | `frontend-development` |
+| `package.json` has express/fastify/hono/nest OR Python with flask/django/fastapi | `backend-development` |
+| Database files: `migrations/`, `schema.prisma`, `models.py`, `*.sql` | `database-design` |
+| API routes, OpenAPI spec, GraphQL schema | `api-design` |
+| React Native, Flutter, iOS/Android project files | `mobile-development` |
+| Electron, Tauri, or native desktop project files | `desktop-development` |
+| Performance-related task (optimization, profiling, caching) | `performance-optimization` |
+| Refactoring or code cleanup task | `code-quality` |
+| Complex git workflow or branching question | `git-workflow` |
+| Architecture decisions (microservices, monolith, patterns) | `architecture-patterns` |
+| Design pattern selection (factory, strategy, observer, etc.) | `design-patterns` |
 
-### Rust
-- Follow Rust API guidelines
-- Use Result/Option types properly
-- Implement proper error handling
-- Write documentation comments (///)
-- Use cargo fmt and cargo clippy
-- Prefer immutable references (&T) over mutable (&mut T)
-- Leverage the ownership system correctly
+Load **multiple skills** if the task spans domains (e.g., fullstack feature → `frontend-development` + `backend-development` + `api-design`).
 
-### Go
-- Follow Effective Go guidelines
-- Keep functions small and focused
-- Use interfaces for abstraction
-- Handle errors explicitly (never ignore)
-- Use gofmt for formatting
-- Write table-driven tests
-- Prefer composition over inheritance
+## Error Recovery
 
-## Implementation Workflow
-1. Understand the requirements thoroughly
-2. Check branch status and create branch/worktree if needed
-3. Load relevant plan if available
-4. Write clean, tested code
-5. Verify with linters and type checkers
-6. Run quality gate (parallel sub-agent review)
-7. Create documentation (docs_save) when prompted
-8. Save session summary with key decisions
-9. Finalize: commit, push, and create PR (task_finalize)
+- **Subagent fails to return**: Re-launch once. If it fails again, proceed with manual review and note in PR body.
+- **Quality gate loops** (fix → test → fail → fix): After 3 iterations, present findings to user and ask whether to proceed or stop.
+- **Git conflict on finalize**: Show the conflict, ask user how to resolve (merge, rebase, or manual).
+- **Worktree creation fails**: Fall back to branch creation. Inform user.
 
 ## Testing
 - Write unit tests for business logic

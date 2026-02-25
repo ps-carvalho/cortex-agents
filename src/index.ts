@@ -9,7 +9,8 @@ import * as session from "./tools/session";
 import * as docs from "./tools/docs";
 import * as task from "./tools/task";
 
-// Agent descriptions for handover toast notifications
+// ─── Agent Descriptions (for handover toasts) ───────────────────────────────
+
 const AGENT_DESCRIPTIONS: Record<string, string> = {
   build: "Development mode — ready to implement",
   plan: "Planning mode — read-only analysis",
@@ -19,6 +20,130 @@ const AGENT_DESCRIPTIONS: Record<string, string> = {
   security: "Security subagent — vulnerability audit",
   devops: "DevOps subagent — CI/CD and deployment",
 };
+
+// ─── Tool Notification Config ────────────────────────────────────────────────
+//
+// Declarative map of tool → toast notification content.
+// The `tool.execute.after` hook reads this map after every tool execution
+// and fires a toast for tools listed here.
+//
+// Tools with existing factory-based toasts are NOT listed here to avoid
+// double-notifications: worktree_create, worktree_remove, worktree_launch,
+// branch_create.
+//
+// Read-only tools are also excluded (plan_list, plan_load, session_list,
+// session_load, docs_list, docs_index, cortex_status, branch_status,
+// worktree_list, worktree_open).
+
+interface ToolNotificationConfig {
+  successTitle: string;
+  successMsg: (args: any, output: string) => string;
+  errorTitle: string;
+  errorMsg: (args: any, output: string) => string;
+  successDuration?: number; // default: 4000ms
+  errorDuration?: number; // default: 8000ms
+}
+
+const TOOL_NOTIFICATIONS: Record<string, ToolNotificationConfig> = {
+  task_finalize: {
+    successTitle: "Task Finalized",
+    successMsg: (args) =>
+      `Committed & pushed: ${(args.commitMessage ?? "").substring(0, 50)}`,
+    errorTitle: "Finalization Failed",
+    errorMsg: (_, out) =>
+      out
+        .replace(/^✗\s*/, "")
+        .split("\n")[0]
+        .substring(0, 100),
+    successDuration: 5000,
+    errorDuration: 10000,
+  },
+  plan_save: {
+    successTitle: "Plan Saved",
+    successMsg: (args) => args.title ?? "Plan saved",
+    errorTitle: "Plan Save Failed",
+    errorMsg: (_, out) => out.substring(0, 100),
+  },
+  plan_delete: {
+    successTitle: "Plan Deleted",
+    successMsg: (args) => args.filename ?? "Plan deleted",
+    errorTitle: "Plan Delete Failed",
+    errorMsg: (_, out) => out.substring(0, 100),
+  },
+  session_save: {
+    successTitle: "Session Saved",
+    successMsg: () => "Session summary recorded",
+    errorTitle: "Session Save Failed",
+    errorMsg: (_, out) => out.substring(0, 100),
+  },
+  docs_save: {
+    successTitle: "Documentation Saved",
+    successMsg: (args) => `${args.type ?? "doc"}: ${args.title ?? "Untitled"}`,
+    errorTitle: "Doc Save Failed",
+    errorMsg: (_, out) => out.substring(0, 100),
+  },
+  docs_init: {
+    successTitle: "Docs Initialized",
+    successMsg: () => "Documentation directory created",
+    errorTitle: "Docs Init Failed",
+    errorMsg: (_, out) => out.substring(0, 100),
+  },
+  cortex_init: {
+    successTitle: "Project Initialized",
+    successMsg: () => ".cortex directory created",
+    errorTitle: "Init Failed",
+    errorMsg: (_, out) => out.substring(0, 100),
+  },
+  cortex_configure: {
+    successTitle: "Models Configured",
+    successMsg: (args) =>
+      `Primary: ${args.primaryModel?.split("/").pop() || "set"}`,
+    errorTitle: "Configure Failed",
+    errorMsg: (_, out) => out.substring(0, 100),
+  },
+  branch_switch: {
+    successTitle: "Branch Switched",
+    successMsg: (args) => `Now on ${args.branch ?? "branch"}`,
+    errorTitle: "Branch Switch Failed",
+    errorMsg: (_, out) =>
+      out
+        .replace(/^✗\s*/, "")
+        .split("\n")[0]
+        .substring(0, 100),
+  },
+};
+
+// ─── Error Message Extraction ────────────────────────────────────────────────
+//
+// Extracts a human-readable message from the session error union type
+// (ProviderAuthError | UnknownError | MessageOutputLengthError |
+//  MessageAbortedError | ApiError).
+
+function extractErrorMessage(
+  error?: { name: string; data: Record<string, unknown> } | null,
+): string {
+  if (!error) return "An unknown error occurred";
+
+  const msg =
+    typeof error.data?.message === "string" ? error.data.message : "";
+
+  switch (error.name) {
+    case "ProviderAuthError":
+      return `Auth error: ${msg || "Provider authentication failed"}`;
+    case "UnknownError":
+      return msg || "An unknown error occurred";
+    case "MessageOutputLengthError":
+      return "Output length exceeded — try compacting the session";
+    case "MessageAbortedError":
+      return `Aborted: ${msg || "Message was aborted"}`;
+    case "APIError":
+      return `API error: ${msg || "Request failed"}`;
+    default:
+      return `Error: ${error.name}`;
+  }
+}
+
+// ─── Plugin Entry ────────────────────────────────────────────────────────────
 
 export const CortexPlugin: Plugin = async (ctx) => {
   return {
@@ -61,9 +186,49 @@ export const CortexPlugin: Plugin = async (ctx) => {
       task_finalize: task.finalize,
     },
 
-    // Agent handover toast notifications
+    // ── Post-execution toast notifications ────────────────────────────────
+    //
+    // Fires after every tool execution. Uses the TOOL_NOTIFICATIONS map
+    // to determine which tools get toasts and what content to display.
+    // Tools with existing factory-based toasts are excluded from the map.
+    "tool.execute.after": async (input, output) => {
+      const config = TOOL_NOTIFICATIONS[input.tool];
+      if (!config) return; // No notification configured for this tool
+
+      try {
+        const result = output.output;
+        const isSuccess = result.startsWith("✓");
+        const isError = result.startsWith("✗");
+
+        if (isSuccess) {
+          await ctx.client.tui.showToast({
+            body: {
+              title: config.successTitle,
+              message: config.successMsg(input.args, result),
+              variant: "success",
+              duration: config.successDuration ?? 4000,
+            },
+          });
+        } else if (isError) {
+          await ctx.client.tui.showToast({
+            body: {
+              title: config.errorTitle,
+              message: config.errorMsg(input.args, result),
+              variant: "error",
+              duration: config.errorDuration ?? 8000,
+            },
+          });
+        }
+        // Informational or warning outputs (⚠) — no toast to avoid noise
+      } catch {
+        // Toast failure is non-fatal
+      }
+    },
+
+    // ── Event-driven notifications ───────────────────────────────────────
     async event({ event }) {
       try {
+        // Agent handover notifications
         if (
           event.type === "message.part.updated" &&
           "part" in event.properties &&
@@ -79,6 +244,50 @@ export const CortexPlugin: Plugin = async (ctx) => {
               message: description,
               variant: "info",
               duration: 4000,
+            },
+          });
+        }
+
+        // Session error notifications
+        if (event.type === "session.error") {
+          const rawError = event.properties.error;
+          // Runtime validation before cast — ensure error has expected shape
+          const error =
+            rawError &&
+            typeof rawError === "object" &&
+            "name" in rawError &&
+            typeof (rawError as Record<string, unknown>).name === "string"
+              ? (rawError as { name: string; data: Record<string, unknown> })
+              : undefined;
+          const message = extractErrorMessage(error);
+
+          await ctx.client.tui.showToast({
+            body: {
+              title: "Session Error",
+              message,
+              variant: "error",
+              duration: 10000,
+            },
+          });
+        }
+
+        // PTY exited notifications (relevant for worktree terminal sessions)
+        if (event.type === "pty.exited") {
+          const rawExitCode = event.properties.exitCode;
+          const exitCode =
+            typeof rawExitCode === "number" && Number.isInteger(rawExitCode)
+              ? rawExitCode
+              : -1;
+
+          await ctx.client.tui.showToast({
+            body: {
+              title: "Terminal Exited",
+              message:
+                exitCode === 0
+                  ? "Terminal session completed successfully"
+                  : `Terminal exited with code ${exitCode}`,
+              variant: exitCode === 0 ? "success" : "warning",
+              duration: exitCode === 0 ? 4000 : 8000,
             },
           });
         }
