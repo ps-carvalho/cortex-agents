@@ -10,6 +10,7 @@ import * as docs from "./tools/docs";
 import * as task from "./tools/task";
 import * as environment from "./tools/environment";
 import * as github from "./tools/github";
+import * as repl from "./tools/repl";
 
 // ─── Agent Descriptions (for handover toasts) ───────────────────────────────
 
@@ -116,13 +117,29 @@ const TOOL_NOTIFICATIONS: Record<string, ToolNotificationConfig> = {
   },
   github_status: {
     successTitle: "GitHub Connected",
-    successMsg: () => "Repository detected with gh CLI",
+    successMsg: (_args: any, output: string) => {
+      const repoMatch = output.match(/Repository:\s+(.+)/);
+      return repoMatch ? `Connected to ${repoMatch[1].substring(0, 100)}` : "GitHub CLI available";
+    },
     errorTitle: "GitHub Not Available",
     errorMsg: (_, out) =>
       out
         .replace(/^✗\s*/, "")
         .split("\n")[0]
         .substring(0, 100),
+  },
+  repl_init: {
+    successTitle: "REPL Loop Started",
+    successMsg: (args) =>
+      `${(args.planFilename ?? "Plan").split("/").pop()?.substring(0, 40)} — tasks loaded`,
+    errorTitle: "REPL Init Failed",
+    errorMsg: (_, out) => out.substring(0, 100),
+  },
+  repl_report: {
+    successTitle: "Task Update",
+    successMsg: (args) => `Result: ${args.result ?? "reported"}`,
+    errorTitle: "Report Failed",
+    errorMsg: (_, out) => out.substring(0, 100),
   },
 };
 
@@ -206,6 +223,12 @@ export const CortexPlugin: Plugin = async (ctx) => {
       github_status: github.status,
       github_issues: github.issues,
       github_projects: github.projects,
+
+      // REPL loop tools - iterative task-by-task implementation
+      repl_init: repl.init,
+      repl_status: repl.status,
+      repl_report: repl.report,
+      repl_summary: repl.summary,
     },
 
     // ── Post-execution toast notifications ────────────────────────────────

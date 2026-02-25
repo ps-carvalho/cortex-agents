@@ -90,16 +90,22 @@ export async function checkGhAvailability(cwd: string): Promise<GhStatus> {
 /**
  * Parse a git remote URL to extract owner and repo name.
  * Handles HTTPS, SSH, and GitHub CLI formats.
+ * Supports both github.com and GitHub Enterprise Server URLs (e.g., github.mycompany.com).
+ *
+ * The regex requires "github" to appear at a hostname boundary (after `//` or `@`)
+ * to prevent false positives like "notgithub.com" or "fakegithub.evil.com".
  */
 export function parseRepoUrl(url: string): { owner: string; name: string } | null {
-  // HTTPS: https://github.com/owner/repo.git
-  const httpsMatch = url.match(/github\.com[/:]([^/]+)\/([^/.]+?)(?:\.git)?$/);
+  // HTTPS: https://github.com/owner/repo.git  OR  https://github.mycompany.com/owner/repo.git
+  // The `//` anchor ensures "github" is at the start of the hostname, not mid-word.
+  const httpsMatch = url.match(/\/\/github[^/]*\/([^/]+)\/([^/.]+?)(?:\.git)?$/);
   if (httpsMatch) {
     return { owner: httpsMatch[1], name: httpsMatch[2] };
   }
 
-  // SSH: git@github.com:owner/repo.git
-  const sshMatch = url.match(/git@github\.com:([^/]+)\/([^/.]+?)(?:\.git)?$/);
+  // SSH: git@github.com:owner/repo.git  OR  git@github.mycompany.com:owner/repo.git
+  // The `git@` prefix already anchors to the hostname start.
+  const sshMatch = url.match(/git@github[^:]*:([^/]+)\/([^/.]+?)(?:\.git)?$/);
   if (sshMatch) {
     return { owner: sshMatch[1], name: sshMatch[2] };
   }
@@ -220,7 +226,13 @@ export async function fetchProjects(
       number: Number(p.number ?? 0),
       title: String(p.title ?? "Untitled"),
     }));
-  } catch {
+  } catch (error: any) {
+    // Surface auth errors — these are actionable for the user.
+    // Other errors (no projects, API format changes) are non-critical.
+    const msg = error?.message ?? String(error);
+    if (msg.includes("auth") || msg.includes("401") || msg.includes("403")) {
+      throw new Error(`GitHub authentication error while fetching projects: ${msg}`);
+    }
     return [];
   }
 }

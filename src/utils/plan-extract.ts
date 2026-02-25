@@ -165,11 +165,11 @@ export function findPlanContent(
   if (!fs.existsSync(plansDir)) return null;
 
   if (planFilename) {
-    // Prevent path traversal — resolve and verify the path stays within plansDir
+    // Prevent path traversal — resolve and verify the path is strictly inside plansDir
     const filepath = path.resolve(plansDir, planFilename);
     const resolvedPlansDir = path.resolve(plansDir);
-    if (!filepath.startsWith(resolvedPlansDir + path.sep) && filepath !== resolvedPlansDir) {
-      return null; // Reject traversal attempts
+    if (!filepath.startsWith(resolvedPlansDir + path.sep)) {
+      return null; // Reject traversal attempts and directory-level references (".", "")
     }
     if (fs.existsSync(filepath)) {
       return { content: fs.readFileSync(filepath, "utf-8"), filename: planFilename };

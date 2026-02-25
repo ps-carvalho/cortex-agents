@@ -8,40 +8,13 @@ import {
   extractIssueRefs,
   buildPrBodyFromPlan,
 } from "../utils/plan-extract.js";
-import { git, gh, which } from "../utils/shell.js";
+import { git, gh } from "../utils/shell.js";
+import { checkGhAvailability } from "../utils/github.js";
 
 const PROTECTED_BRANCHES = ["main", "master", "develop", "production", "staging"];
 const DOCS_DIR = "docs";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-
-/**
- * Check if `gh` CLI is installed and authenticated.
- */
-async function checkGhCli(cwd: string): Promise<{ ok: boolean; error?: string }> {
-  // Check if gh exists
-  const ghPath = await which("gh");
-  if (!ghPath) {
-    return {
-      ok: false,
-      error:
-        "GitHub CLI (gh) is not installed. Install it from https://cli.github.com/ and run `gh auth login`.",
-    };
-  }
-
-  // Check if authenticated
-  try {
-    await gh(cwd, "auth", "status");
-  } catch {
-    return {
-      ok: false,
-      error:
-        "GitHub CLI is not authenticated. Run `gh auth login` to authenticate.",
-    };
-  }
-
-  return { ok: true };
-}
 
 /**
  * Check if a remote named "origin" is configured.
@@ -199,9 +172,12 @@ Create a feature/bugfix branch first with branch_create or worktree_create.`;
     }
 
     // ── 4. Check prerequisites ────────────────────────────────
-    const ghCheck = await checkGhCli(cwd);
-    if (!ghCheck.ok) {
-      return `✗ ${ghCheck.error}`;
+    const ghStatus = await checkGhAvailability(cwd);
+    if (!ghStatus.installed) {
+      return "✗ GitHub CLI (gh) is not installed. Install it from https://cli.github.com/ and run `gh auth login`.";
+    }
+    if (!ghStatus.authenticated) {
+      return "✗ GitHub CLI is not authenticated. Run `gh auth login` to authenticate.";
     }
 
     const remoteCheck = await checkRemote(cwd);
