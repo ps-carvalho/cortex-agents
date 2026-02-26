@@ -1,0 +1,129 @@
+{
+  "planFilename": "2026-02-26-feature-architect-branch-and-commit-plan-artifacts-off-mai.md",
+  "startedAt": "2026-02-26T15:25:55.937Z",
+  "buildCommand": "npm run build",
+  "testCommand": "npx vitest run",
+  "lintCommand": null,
+  "maxRetries": 3,
+  "currentTaskIndex": -1,
+  "tasks": [
+    {
+      "index": 0,
+      "description": "Create `plan_commit` tool in `src/tools/plan.ts`",
+      "status": "passed",
+      "retries": 0,
+      "iterations": [
+        {
+          "at": "2026-02-26T15:27:32.644Z",
+          "result": "pass",
+          "detail": "Created plan_commit factory function (createCommit) in src/tools/plan.ts. Includes: parseFrontmatter/upsertFrontmatterField helpers, TYPE_TO_PREFIX mapping, git branch creation with fallback to existing branch, .cortex/ staging, commit, toast notifications. Build passes."
+        }
+      ]
+    },
+    {
+      "index": 1,
+      "description": "Register `plan_commit` tool in `src/index.ts`",
+      "status": "passed",
+      "retries": 0,
+      "iterations": [
+        {
+          "at": "2026-02-26T15:28:10.831Z",
+          "result": "pass",
+          "detail": "Registered plan_commit tool in index.ts (plan.createCommit(ctx.client) factory pattern) and added TOOL_NOTIFICATIONS config for plan_commit. Build passes."
+        }
+      ]
+    },
+    {
+      "index": 2,
+      "description": "Add `branch` field support to `plan_save` frontmatter",
+      "status": "passed",
+      "retries": 0,
+      "iterations": [
+        {
+          "at": "2026-02-26T15:28:39.860Z",
+          "result": "pass",
+          "detail": "Added optional `branch` arg to plan_save tool schema. When provided, includes `branch: {value}` in YAML frontmatter. Build passes."
+        }
+      ]
+    },
+    {
+      "index": 3,
+      "description": "Add `extractBranch()` utility to `src/utils/plan-extract.ts`",
+      "status": "passed",
+      "retries": 0,
+      "iterations": [
+        {
+          "at": "2026-02-26T15:29:05.743Z",
+          "result": "pass",
+          "detail": "Added extractBranch() to src/utils/plan-extract.ts. Parses `branch: feature/xyz` from YAML frontmatter, returns string | null. Build passes."
+        }
+      ]
+    },
+    {
+      "index": 4,
+      "description": "Update architect agent workflow in `.opencode/agents/architect.md`",
+      "status": "passed",
+      "retries": 0,
+      "iterations": [
+        {
+          "at": "2026-02-26T15:30:18.444Z",
+          "result": "pass",
+          "detail": "Updated architect.md: added plan_commit to tools list, new Step 4.5 (Commit Plan to Branch — MANDATORY), updated Steps 5/6 for actual branch name handoff, updated constraints/tool usage docs. Build passes."
+        }
+      ]
+    },
+    {
+      "index": 5,
+      "description": "Update implement agent awareness in `.opencode/agents/implement.md`",
+      "status": "passed",
+      "retries": 0,
+      "iterations": [
+        {
+          "at": "2026-02-26T15:30:56.454Z",
+          "result": "pass",
+          "detail": "Updated implement.md: Step 3 now detects plan branch field, Step 4 has three conditional flows (on plan branch, plan branch exists but on different branch, no plan branch), Step 5 adds worktree-from-plan-branch and switch-to-plan-branch options. Build passes."
+        }
+      ]
+    },
+    {
+      "index": 6,
+      "description": "Enhance `worktree_create` to accept optional `fromBranch` parameter",
+      "status": "passed",
+      "retries": 0,
+      "iterations": [
+        {
+          "at": "2026-02-26T15:31:40.830Z",
+          "result": "pass",
+          "detail": "Added optional fromBranch parameter to worktree_create. When set, creates worktree from existing branch (git worktree add {path} {fromBranch}) with fallback to creating the branch. Without fromBranch, original behavior preserved. Build passes."
+        }
+      ]
+    },
+    {
+      "index": 7,
+      "description": "Write tests for `plan_commit` tool",
+      "status": "passed",
+      "retries": 0,
+      "iterations": [
+        {
+          "at": "2026-02-26T15:34:09.414Z",
+          "result": "pass",
+          "detail": "Wrote 18 new tests for plan_commit helpers (parseFrontmatter, upsertFrontmatterField, TYPE_TO_PREFIX). Moved pure functions to plan-extract.ts for testability. All 23 plan tests pass, full suite 436/436 green."
+        }
+      ]
+    },
+    {
+      "index": 8,
+      "description": "Write tests for `extractBranch()` utility",
+      "status": "passed",
+      "retries": 0,
+      "iterations": [
+        {
+          "at": "2026-02-26T15:35:16.859Z",
+          "result": "pass",
+          "detail": "Added 11 extractBranch() tests to plan-extract.test.ts covering: valid branch extraction, null returns (no branch, no frontmatter, empty string, empty value), whitespace handling, field position variants, branch outside frontmatter. Full suite 447/447 green."
+        }
+      ]
+    }
+  ],
+  "completedAt": "2026-02-26T15:35:16.859Z"
+}

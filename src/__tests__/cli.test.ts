@@ -354,10 +354,10 @@ describe("CLI — cleanupStaleAgents behavior", () => {
     // Create the agents directory with a stale file
     const globalAgentsDir = path.join(tmpDir, ".config", "opencode", "agents");
     fs.mkdirSync(globalAgentsDir, { recursive: true });
-    fs.writeFileSync(path.join(globalAgentsDir, "debug.md"), "# stale");
+    fs.writeFileSync(path.join(globalAgentsDir, "crosslayer.md"), "# stale");
 
     const output = runCLI("install", tmpDir);
-    expect(output).toContain("Cleaned up stale agent: debug.md");
+    expect(output).toContain("Cleaned up stale agent: crosslayer.md");
   });
 });
 
@@ -563,7 +563,7 @@ describe("Config manipulation logic", () => {
 
   describe("STALE_AGENT_FILES cleanup logic", () => {
     it("only removes files that exist", () => {
-      const existingFiles = new Set(["build.md", "debug.md"]);
+      const existingFiles = new Set(["build.md", "crosslayer.md"]);
       const removed: string[] = [];
 
       // Simulate cleanupStaleAgents logic
@@ -573,7 +573,7 @@ describe("Config manipulation logic", () => {
         }
       }
 
-      expect(removed).toEqual(["build.md", "debug.md"]);
+      expect(removed).toEqual(["build.md", "crosslayer.md"]);
       expect(removed).not.toContain("plan.md");
     });
 

@@ -5,6 +5,59 @@ const CORTEX_DIR = ".cortex";
 const PLANS_DIR = "plans";
 
 /**
+ * Map plan types to git branch prefixes.
+ */
+export const TYPE_TO_PREFIX: Record<string, string> = {
+  feature: "feature",
+  bugfix: "bugfix",
+  refactor: "refactor",
+  architecture: "refactor",
+  spike: "feature",
+  docs: "docs",
+};
+
+/**
+ * Parse YAML frontmatter from plan content.
+ * Returns a map of key-value pairs, or null if no frontmatter found.
+ */
+export function parseFrontmatter(content: string): Record<string, string> | null {
+  const match = content.match(/^---\n([\s\S]*?)\n---/);
+  if (!match) return null;
+
+  const fm: Record<string, string> = {};
+  for (const line of match[1].split("\n")) {
+    const kv = line.match(/^(\w+):\s*"?([^"\n]*)"?\s*$/);
+    if (kv) {
+      fm[kv[1]] = kv[2].trim();
+    }
+  }
+  return fm;
+}
+
+/**
+ * Update or insert a field in the plan's YAML frontmatter.
+ * Returns the updated file content.
+ */
+export function upsertFrontmatterField(content: string, key: string, value: string): string {
+  const fmMatch = content.match(/^(---\n)([\s\S]*?)(\n---)/);
+  if (!fmMatch) return content;
+
+  const fmBody = fmMatch[2];
+  const fieldRegex = new RegExp(`^${key}:\\s*.*$`, "m");
+
+  let updatedFm: string;
+  if (fieldRegex.test(fmBody)) {
+    // Update existing field
+    updatedFm = fmBody.replace(fieldRegex, `${key}: ${value}`);
+  } else {
+    // Insert before the closing ---
+    updatedFm = fmBody + `\n${key}: ${value}`;
+  }
+
+  return fmMatch[1] + updatedFm + fmMatch[3] + content.slice(fmMatch[0].length);
+}
+
+/**
  * Sections extracted from a plan for use in a PR body.
  */
 export interface PlanSections {
@@ -18,6 +71,23 @@ export interface PlanSections {
   decisions: string;
   /** The raw plan filename */
   filename: string;
+}
+
+/**
+ * Extract the branch name from plan frontmatter.
+ *
+ * Looks for `branch: feature/xyz` in YAML frontmatter.
+ * Returns the branch name string, or null if not found.
+ */
+export function extractBranch(planContent: string): string | null {
+  const frontmatterMatch = planContent.match(/^---\n([\s\S]*?)\n---/);
+  if (!frontmatterMatch) return null;
+
+  const branchMatch = frontmatterMatch[1].match(/^branch:\s*(.+)$/m);
+  if (!branchMatch) return null;
+
+  const branch = branchMatch[1].trim();
+  return branch || null;
 }
 
 /**

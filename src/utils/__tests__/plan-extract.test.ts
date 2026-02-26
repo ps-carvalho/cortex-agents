@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   extractPlanSections,
   extractIssueRefs,
+  extractBranch,
   buildPrBodyFromPlan,
   findPlanContent,
 } from "../plan-extract.js";
@@ -324,5 +325,130 @@ describe("findPlanContent", () => {
     expect(result).toBeNull();
 
     fs.rmSync(tmpDir, { recursive: true });
+  });
+});
+
+describe("extractBranch", () => {
+  it("extracts branch from frontmatter", () => {
+    const content = `---
+title: "Auth System"
+type: feature
+branch: feature/auth-system
+status: draft
+---
+
+# Auth System
+`;
+    expect(extractBranch(content)).toBe("feature/auth-system");
+  });
+
+  it("extracts branch with bugfix prefix", () => {
+    const content = `---
+title: "Fix Login"
+type: bugfix
+branch: bugfix/fix-login
+---
+
+# Fix Login
+`;
+    expect(extractBranch(content)).toBe("bugfix/fix-login");
+  });
+
+  it("extracts branch with refactor prefix", () => {
+    const content = `---
+title: "Refactor DB"
+type: architecture
+branch: refactor/refactor-db
+---
+
+# Refactor DB
+`;
+    expect(extractBranch(content)).toBe("refactor/refactor-db");
+  });
+
+  it("returns null when no branch field in frontmatter", () => {
+    const content = `---
+title: "No Branch"
+type: feature
+status: draft
+---
+
+# No Branch
+`;
+    expect(extractBranch(content)).toBeNull();
+  });
+
+  it("returns null when no frontmatter at all", () => {
+    const content = `# Just a Plan
+
+Some content without frontmatter.
+`;
+    expect(extractBranch(content)).toBeNull();
+  });
+
+  it("returns null for empty string", () => {
+    expect(extractBranch("")).toBeNull();
+  });
+
+  it("returns null for empty branch value", () => {
+    const content = `---
+title: "Empty Branch"
+type: feature
+branch:
+---
+
+# Empty Branch
+`;
+    expect(extractBranch(content)).toBeNull();
+  });
+
+  it("handles branch with extra whitespace", () => {
+    const content = `---
+title: "Spaced"
+type: feature
+branch:   feature/spaced-branch  
+---
+
+# Spaced
+`;
+    expect(extractBranch(content)).toBe("feature/spaced-branch");
+  });
+
+  it("ignores branch field outside frontmatter", () => {
+    const content = `---
+title: "Plan"
+type: feature
+---
+
+branch: feature/fake-branch
+
+Some content.
+`;
+    expect(extractBranch(content)).toBeNull();
+  });
+
+  it("handles branch field as first field", () => {
+    const content = `---
+branch: feature/first
+title: "First"
+type: feature
+---
+
+# First
+`;
+    expect(extractBranch(content)).toBe("feature/first");
+  });
+
+  it("handles branch field as last field", () => {
+    const content = `---
+title: "Last"
+type: feature
+status: draft
+branch: feature/last
+---
+
+# Last
+`;
+    expect(extractBranch(content)).toBe("feature/last");
   });
 });

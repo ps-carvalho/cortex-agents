@@ -8,7 +8,6 @@ import * as plan from "./tools/plan";
 import * as session from "./tools/session";
 import * as docs from "./tools/docs";
 import * as task from "./tools/task";
-import * as environment from "./tools/environment";
 import * as github from "./tools/github";
 import * as repl from "./tools/repl";
 
@@ -17,12 +16,13 @@ import * as repl from "./tools/repl";
 const AGENT_DESCRIPTIONS: Record<string, string> = {
   implement: "Development mode — ready to implement",
   architect: "Planning mode — read-only analysis",
-  fix: "Debug mode — troubleshooting and fixes",
-  audit: "Review mode — code quality assessment",
-  crosslayer: "Crosslayer subagent — end-to-end implementation",
-  qa: "QA subagent — writing tests",
-  guard: "Security subagent — vulnerability audit",
-  ship: "DevOps subagent — CI/CD and deployment",
+  fix: "Quick fix mode — fast turnaround",
+  debug: "Debug subagent — root cause analysis",
+  coder: "Coder subagent — multi-layer implementation",
+  testing: "Testing subagent — writing tests",
+  security: "Security subagent — vulnerability audit",
+  devops: "DevOps subagent — CI/CD and deployment",
+  audit: "Audit subagent — code quality assessment",
 };
 
 // ─── Tool Notification Config ────────────────────────────────────────────────
@@ -32,8 +32,7 @@ const AGENT_DESCRIPTIONS: Record<string, string> = {
 // and fires a toast for tools listed here.
 //
 // Tools with existing factory-based toasts are NOT listed here to avoid
-// double-notifications: worktree_create, worktree_remove, worktree_launch,
-// branch_create.
+// double-notifications: worktree_create, worktree_remove, branch_create.
 //
 // Read-only tools are also excluded (plan_list, plan_load, session_list,
 // session_load, docs_list, docs_index, cortex_status, branch_status,
@@ -74,6 +73,7 @@ const TOOL_NOTIFICATIONS: Record<string, ToolNotificationConfig> = {
     errorTitle: "Plan Delete Failed",
     errorMsg: (_, out) => out.substring(0, 100),
   },
+  // plan_commit — excluded: uses factory-based toasts in createCommit()
   session_save: {
     successTitle: "Session Saved",
     successMsg: () => "Session summary recorded",
@@ -188,7 +188,6 @@ export const CortexPlugin: Plugin = async (ctx) => {
       worktree_list: worktree.list,
       worktree_remove: worktree.createRemove(ctx.client),
       worktree_open: worktree.open,
-      worktree_launch: worktree.createLaunch(ctx.client, ctx.$),
 
       // Branch tools - git branch operations (factory for toast notifications)
       branch_create: branch.createCreate(ctx.client),
@@ -200,6 +199,7 @@ export const CortexPlugin: Plugin = async (ctx) => {
       plan_list: plan.list,
       plan_load: plan.load,
       plan_delete: plan.delete_,
+      plan_commit: plan.createCommit(ctx.client),
 
       // Session tools - session summaries with decisions
       session_save: session.save,
@@ -214,10 +214,6 @@ export const CortexPlugin: Plugin = async (ctx) => {
 
       // Task tools - finalize workflow (commit, push, PR)
       task_finalize: task.finalize,
-
-      // Environment tools - IDE/terminal detection for contextual options
-      detect_environment: environment.detectEnvironment,
-      get_environment_info: environment.getEnvironmentInfo,
 
       // GitHub integration tools - work item listing, issue selection, project boards
       github_status: github.status,
@@ -316,26 +312,6 @@ export const CortexPlugin: Plugin = async (ctx) => {
           });
         }
 
-        // PTY exited notifications (relevant for worktree terminal sessions)
-        if (event.type === "pty.exited") {
-          const rawExitCode = event.properties.exitCode;
-          const exitCode =
-            typeof rawExitCode === "number" && Number.isInteger(rawExitCode)
-              ? rawExitCode
-              : -1;
-
-          await ctx.client.tui.showToast({
-            body: {
-              title: "Terminal Exited",
-              message:
-                exitCode === 0
-                  ? "Terminal session completed successfully"
-                  : `Terminal exited with code ${exitCode}`,
-              variant: exitCode === 0 ? "success" : "warning",
-              duration: exitCode === 0 ? 4000 : 8000,
-            },
-          });
-        }
       } catch {
         // Toast failure is non-fatal — silently ignore
       }

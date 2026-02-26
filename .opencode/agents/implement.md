@@ -15,7 +15,6 @@ tools:
   worktree_list: true
   worktree_remove: true
   worktree_open: true
-  worktree_launch: true
   branch_create: true
   branch_status: true
   branch_switch: true
@@ -28,7 +27,6 @@ tools:
   docs_list: true
   docs_index: true
   task_finalize: true
-  detect_environment: true
   github_status: true
   github_issues: true
   github_projects: true
@@ -86,8 +84,27 @@ If `./opencode.json` does not have agent model configuration, offer to configure
 Run `plan_list` to see if there's a relevant plan for this work.
 If a plan exists, load it with `plan_load`.
 
+**Plan branch detection:** If the loaded plan has a `branch` field in its frontmatter (set by the architect's `plan_commit`), note the branch name. This branch already contains the committed plan and `.cortex/` artifacts. You should use this branch for implementation.
+
 ### Step 4: Ask User About Branch Strategy
-**If on a protected branch (main/master/develop)**, use the question tool to ask:
+
+**If the plan has a `branch` field AND you are already on that branch:**
+Skip the branch creation prompt entirely — you're already set up. Inform the user:
+"You're on the plan branch `{branch}`. Ready to implement."
+
+**If the plan has a `branch` field BUT you are on a different branch (e.g., main):**
+Offer to switch or create a worktree from the plan branch:
+
+"The plan has a branch `{branch}`. How would you like to proceed?"
+
+Options:
+1. **Create a worktree from the plan branch (Recommended)** — Isolated copy using the existing `{branch}`
+2. **Switch to the plan branch** — Checkout `{branch}` directly in this repo
+3. **Create a new branch** — Ignore the plan branch, start fresh
+4. **Continue here** — Only if you're certain (not recommended on protected branches)
+
+**If no plan branch exists AND on a protected branch:**
+Use the original prompt:
 
 "I'm ready to implement changes. How would you like to proceed?"
 
@@ -96,50 +113,12 @@ Options:
 2. **Create a new branch** - Stay in this repo, create feature/bugfix branch
 3. **Continue here** - Only if you're certain (not recommended on protected branches)
 
-### Step 4b: Worktree Launch Mode (only if worktree chosen)
-**If the user chose "Create a worktree"**, detect the environment and offer contextual options:
-
-1. **Run `detect_environment`** to determine the IDE/editor context
-2. **Check CLI availability** — the report includes a `CLI Status` section. If the IDE CLI is **NOT found in PATH**, skip the "Open in [IDE]" option and recommend "Open in new terminal tab" instead. The driver system has an automatic fallback chain, but it's better UX to not offer a broken option.
-3. **Customize options based on detection**:
-
-#### If VS Code, Cursor, Windsurf, or Zed detected (and CLI available):
-"How would you like to work in the worktree?"
-1. **Open in [IDE Name] (Recommended)** - Open worktree in [IDE Name] with integrated terminal
-2. **Open in new terminal tab** - Full OpenCode session in your terminal emulator
-3. **Stay in this session** - Create worktree, continue working here
-4. **Run in background** - AI implements headlessly while you keep working here
-
-#### If JetBrains IDE detected:
-"How would you like to work in the worktree?"
-1. **Open in new terminal tab (Recommended)** - Full OpenCode session in your terminal
-2. **Stay in this session** - Create worktree, continue working here
-3. **Run in background** - AI implements headlessly while you keep working here
-
-_Note: JetBrains IDEs require manual folder opening. After worktree creation, open the folder in your IDE._
-
-#### If Terminal only (no IDE detected):
-"How would you like to work in the worktree?"
-1. **Open in new terminal tab (Recommended)** - Full independent OpenCode session in a new tab
-2. **Stay in this session** - Create worktree, continue working here
-3. **Open in-app PTY** - Embedded terminal within this OpenCode session
-4. **Run in background** - AI implements headlessly while you keep working here
-
-#### If Unknown environment:
-"How would you like to work in the worktree?"
-1. **Open in new terminal tab (Recommended)** - Full OpenCode session in new terminal
-2. **Stay in this session** - Create worktree, continue working here
-3. **Run in background** - AI implements headlessly
-
 ### Step 5: Execute Based on Response
+- **Worktree from plan branch**: Use `worktree_create` with `fromBranch` set to the plan branch. Report the worktree path. Continue working in the current session.
+- **Worktree (new branch)**: Use `worktree_create` with appropriate type. Report the worktree path. Continue working in the current session.
+- **Switch to plan branch**: Use `branch_switch` with the plan branch name
 - **Branch**: Use `branch_create` with appropriate type (feature/bugfix/refactor)
-- **Worktree -> Stay**: Use `worktree_create`, continue in current session
-- **Worktree -> Terminal**: Use `worktree_create`, then `worktree_launch` with mode `terminal`
-- **Worktree -> PTY**: Use `worktree_create`, then `worktree_launch` with mode `pty`
-- **Worktree -> Background**: Use `worktree_create`, then `worktree_launch` with mode `background`
 - **Continue**: Proceed with caution, warn user about risks
-
-**For all worktree_launch modes**: If a plan was loaded in Step 3, pass its filename via the `plan` parameter so it gets propagated into the worktree's `.cortex/plans/` directory.
 
 ### Step 6: REPL Implementation Loop
 
@@ -147,14 +126,14 @@ Implement plan tasks iteratively using the REPL loop. Each task goes through a *
 
 **If no plan was loaded in Step 3**, fall back to implementing changes directly (skip to 6c without the loop tools) and proceed to Step 7 when done.
 
-**Multi-layer feature detection:** If the task involves changes across 3+ layers (e.g., database + API + frontend, or CLI + library + tests), launch the **@crosslayer sub-agent** via the Task tool to implement the end-to-end feature.
+**Multi-layer feature detection:** If the task involves changes across 3+ layers (e.g., database + API + frontend, or CLI + library + tests), launch the **@coder sub-agent** via the Task tool to implement the end-to-end feature.
 
 #### 6a: Initialize the Loop
 Run `repl_init` with the plan filename from Step 3.
 Review the auto-detected build/test commands. If they look wrong, re-run with manual overrides.
 
 #### 6b: Check Loop Status
-Run `repl_status` to see the next pending task, current progress, and build/test commands.
+Run `repl_status` to see the next pending task, current progress, build/test commands, and acceptance criteria (ACs) for the current task. Implement to satisfy all listed ACs.
 
 #### 6c: Implement the Current Task
 Read the task description and implement it. Write the code changes needed for that specific task.
@@ -198,20 +177,20 @@ After completing implementation and BEFORE documentation or finalization, launch
 
 **Always launch (both in the same message):**
 
-1. **@qa sub-agent** — Provide:
+1. **@testing sub-agent** — Provide:
    - List of files you created or modified
    - Summary of what was implemented
    - The test framework used in the project (check `package.json` or existing tests)
    - Ask it to: write unit tests for new code, verify existing tests still pass, report coverage gaps
 
-2. **@guard sub-agent** — Provide:
+2. **@security sub-agent** — Provide:
    - List of files you created or modified
    - Summary of what was implemented
    - Ask it to: audit for OWASP Top 10 vulnerabilities, check for secrets/credentials in code, review input validation, report findings with severity levels
 
 **Conditionally launch (in the same parallel batch if applicable):**
 
-3. **@ship sub-agent** — ONLY if you modified any of these file patterns:
+3. **@devops sub-agent** — ONLY if you modified any of these file patterns:
    - `Dockerfile*`, `docker-compose*`, `.dockerignore`
    - `.github/workflows/*`, `.gitlab-ci*`, `Jenkinsfile`
    - `*.yml`/`*.yaml` in project root that look like CI config
@@ -220,9 +199,9 @@ After completing implementation and BEFORE documentation or finalization, launch
 
 **After all sub-agents return, review their results:**
 
-- **@qa results**: If any `[BLOCKING]` issues exist (tests revealing bugs), fix the implementation before proceeding. `[WARNING]` issues should be addressed if feasible.
-- **@guard results**: If `CRITICAL` or `HIGH` findings exist, fix them before proceeding. `MEDIUM` findings should be noted in the PR body. `LOW` findings can be deferred.
-- **@ship results**: If `ERROR` findings exist, fix them before proceeding.
+- **@testing results**: If any `[BLOCKING]` issues exist (tests revealing bugs), fix the implementation before proceeding. `[WARNING]` issues should be addressed if feasible.
+- **@security results**: If `CRITICAL` or `HIGH` findings exist, fix them before proceeding. `MEDIUM` findings should be noted in the PR body. `LOW` findings can be deferred.
+- **@devops results**: If `ERROR` findings exist, fix them before proceeding.
 
 **Include a quality gate summary in the PR body** when finalizing (Step 10):
 ```
@@ -349,10 +328,8 @@ Load **multiple skills** if the task spans domains (e.g., fullstack feature → 
 - `branch_status` - ALWAYS check before making changes
 - `branch_create` - Create feature/bugfix branch
 - `worktree_create` - Create isolated worktree for parallel work
-- `worktree_launch` - Launch OpenCode in a worktree (terminal tab, PTY, or background). Auto-propagates plans.
-- `worktree_open` - Get manual command to open terminal in worktree (legacy fallback)
+- `worktree_open` - Get command to open terminal in worktree
 - `cortex_configure` - Save per-project model config to ./opencode.json
-- `detect_environment` - Detect IDE/terminal for contextual worktree launch options
 - `plan_load` - Load implementation plan if available
 - `session_save` - Record session summary after completing work
 - `task_finalize` - Finalize task: stage, commit, push, create PR. Auto-detects worktrees, auto-populates PR body from plans.
@@ -375,10 +352,12 @@ The following sub-agents are available via the Task tool. **Launch multiple sub-
 
 | Sub-Agent | Trigger | What It Does | When to Use |
 |-----------|---------|--------------|-------------|
-| `@qa` | **Always** after implementation | Writes tests, runs test suite, reports coverage gaps | Step 7 — mandatory |
-| `@guard` | **Always** after implementation | OWASP audit, secrets scan, severity-rated findings | Step 7 — mandatory |
-| `@crosslayer` | Multi-layer features (3+ layers) | End-to-end implementation across frontend/backend/database | Step 6 — conditional |
-| `@ship` | CI/CD/Docker/infra files changed | Config validation, best practices checklist | Step 7 — conditional |
+| `@testing` | **Always** after implementation | Writes tests, runs test suite, reports coverage gaps | Step 7 — mandatory |
+| `@security` | **Always** after implementation | OWASP audit, secrets scan, severity-rated findings | Step 7 — mandatory |
+| `@audit` | **Always** after implementation | Code quality, tech debt, pattern review | Step 7 — mandatory |
+| `@coder` | Multi-layer features (3+ layers) | End-to-end implementation across frontend/backend/database | Step 6 — conditional |
+| `@devops` | CI/CD/Docker/infra files changed | Config validation, best practices checklist | Step 7 — conditional |
+| `@debug` | Issues found during implementation | Root cause analysis, troubleshooting | Step 6 — conditional |
 
 ### How to Launch Sub-Agents
 
@@ -386,8 +365,8 @@ Use the **Task tool** with `subagent_type` set to the agent name. Example for th
 
 ```
 # In a single message, launch both:
-Task(subagent_type="qa", prompt="Files changed: [list]. Summary: [what was done]. Test framework: vitest. Write tests and report results.")
-Task(subagent_type="guard", prompt="Files changed: [list]. Summary: [what was done]. Audit for vulnerabilities and report findings.")
+Task(subagent_type="testing", prompt="Files changed: [list]. Summary: [what was done]. Test framework: vitest. Write tests and report results.")
+Task(subagent_type="security", prompt="Files changed: [list]. Summary: [what was done]. Audit for vulnerabilities and report findings.")
 ```
 
 Both will execute in parallel and return their structured reports.
