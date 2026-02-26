@@ -12,7 +12,7 @@ import { tool } from "@opencode-ai/plugin";
 import * as fs from "fs";
 import * as path from "path";
 import {
-  parseTasksFromPlan,
+  parseTasksWithAC,
   detectCommands,
   readReplState,
   writeReplState,
@@ -76,9 +76,9 @@ export const init = tool({
 
     const planContent = fs.readFileSync(planPath, "utf-8");
 
-    // 2. Parse tasks from plan
-    const taskDescriptions = parseTasksFromPlan(planContent);
-    if (taskDescriptions.length === 0) {
+    // 2. Parse tasks from plan (with acceptance criteria)
+    const parsedTasks = parseTasksWithAC(planContent);
+    if (parsedTasks.length === 0) {
       return `\u2717 Error: No tasks found in plan: ${planFilename}\n\nThe plan must contain unchecked checkbox items (- [ ] ...) in a ## Tasks section.`;
     }
 
@@ -88,9 +88,10 @@ export const init = tool({
     const finalTest = testCommand ?? detected.testCommand;
 
     // 4. Build initial state
-    const tasks: ReplTask[] = taskDescriptions.map((desc, i) => ({
+    const tasks: ReplTask[] = parsedTasks.map((parsed, i) => ({
       index: i,
-      description: desc,
+      description: parsed.description,
+      acceptanceCriteria: parsed.acceptanceCriteria,
       status: "pending" as const,
       retries: 0,
       iterations: [],

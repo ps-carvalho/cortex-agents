@@ -35,6 +35,8 @@ export interface ReplTask {
   index: number;
   /** Task description from the plan */
   description: string;
+  /** Acceptance criteria extracted from `- AC:` lines under the task */
+  acceptanceCriteria: string[];
   /** Current status in the state machine */
   status: TaskStatus;
   /** Number of failed attempts (resets on pass) */
@@ -76,31 +78,61 @@ export interface CommandDetection {
 
 // ─── Task Parsing ────────────────────────────────────────────────────────────
 
+export interface ParsedTask {
+  description: string;
+  acceptanceCriteria: string[];
+}
+
 /**
  * Parse plan tasks from plan markdown content.
  *
  * Looks for unchecked checkbox items (`- [ ] ...`) in a `## Tasks` section.
  * Falls back to any unchecked checkboxes anywhere in the document.
  * Strips the `Task N:` prefix if present to get a clean description.
+ * Extracts `- AC:` lines immediately following each task as acceptance criteria.
  */
 export function parseTasksFromPlan(planContent: string): string[] {
-  // Try to find a ## Tasks section first
+  return parseTasksWithAC(planContent).map((t) => t.description);
+}
+
+/**
+ * Parse plan tasks with their acceptance criteria.
+ *
+ * Returns structured tasks including `- AC:` lines found under each checkbox item.
+ */
+export function parseTasksWithAC(planContent: string): ParsedTask[] {
   const tasksSection = extractTasksSection(planContent);
   const source = tasksSection || planContent;
 
-  const tasks: string[] = [];
+  const tasks: ParsedTask[] = [];
   const lines = source.split("\n");
 
-  for (const line of lines) {
-    // Match unchecked checkbox items: - [ ] Description
-    const match = line.match(/^[-*]\s*\[\s\]\s+(.+)$/);
+  for (let i = 0; i < lines.length; i++) {
+    const match = lines[i].match(/^[-*]\s*\[\s\]\s+(.+)$/);
     if (match) {
       let description = match[1].trim();
-      // Strip "Task N:" prefix if present
       description = description.replace(/^Task\s+\d+\s*:\s*/i, "");
-      if (description) {
-        tasks.push(description);
+      if (!description) continue;
+
+      // Collect AC lines immediately following this task
+      const acs: string[] = [];
+      for (let j = i + 1; j < lines.length; j++) {
+        const acMatch = lines[j].match(/^\s+[-*]\s*AC:\s*(.+)$/);
+        if (acMatch) {
+          acs.push(acMatch[1].trim());
+        } else if (lines[j].match(/^[-*]\s*\[/)) {
+          // Next task checkbox — stop collecting ACs
+          break;
+        } else if (lines[j].trim() === "") {
+          // Blank line — continue (may be spacing between AC lines)
+          continue;
+        } else {
+          // Non-AC, non-blank, non-checkbox line — stop
+          break;
+        }
       }
+
+      tasks.push({ description, acceptanceCriteria: acs });
     }
   }
 
@@ -304,6 +336,13 @@ export function readReplState(cwd: string): ReplState | null {
       return null;
     }
 
+    // Backward compatibility: ensure all tasks have acceptanceCriteria
+    for (const task of raw.tasks) {
+      if (!Array.isArray(task.acceptanceCriteria)) {
+        task.acceptanceCriteria = [];
+      }
+    }
+
     return raw as ReplState;
   } catch {
     return null;
@@ -402,10 +441,22 @@ export function formatProgress(state: ReplState): string {
     if (current.retries > 0) {
       lines.push(`  Attempt: ${current.retries + 1}/${state.maxRetries}`);
     }
+    if (current.acceptanceCriteria.length > 0) {
+      lines.push(`  Acceptance Criteria:`);
+      for (const ac of current.acceptanceCriteria) {
+        lines.push(`    - ${ac}`);
+      }
+    }
   } else if (next) {
     lines.push("");
     lines.push(`Next Task (#${next.index + 1}):`);
     lines.push(`  "${next.description}"`);
+    if (next.acceptanceCriteria.length > 0) {
+      lines.push(`  Acceptance Criteria:`);
+      for (const ac of next.acceptanceCriteria) {
+        lines.push(`    - ${ac}`);
+      }
+    }
   } else if (isLoopComplete(state)) {
     lines.push("");
     lines.push("All tasks complete.");
@@ -506,7 +557,16 @@ export function formatSummary(state: ReplState): string {
   }
 
   lines.push("");
-  lines.push(`**Results: ${passed} passed, ${failed} failed, ${skipped} skipped** (${totalIterations} total iterations)`);
+  const totalACs = state.tasks.reduce((sum, t) => sum + t.acceptanceCriteria.length, 0);
+  const passedACs = state.tasks
+    .filter((t) => t.status === "passed")
+    .reduce((sum, t) => sum + t.acceptanceCriteria.length, 0);
+
+  let resultsLine = `**Results: ${passed} passed, ${failed} failed, ${skipped} skipped** (${totalIterations} total iterations)`;
+  if (totalACs > 0) {
+    resultsLine += ` | **ACs: ${passedACs}/${totalACs} satisfied**`;
+  }
+  lines.push(resultsLine);
 
   // Timing
   if (state.startedAt) {

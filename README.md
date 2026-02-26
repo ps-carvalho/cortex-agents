@@ -43,7 +43,7 @@ npx cortex-agents configure     # Pick your models interactively
 # Restart OpenCode - done.
 ```
 
-That's it. Your OpenCode session now has 8 specialized agents, 32 tools, and 14 domain skills.
+That's it. Your OpenCode session now has 9 specialized agents, 29 tools, and 14 domain skills.
 
 > **Built-in Agent Replacement** — When installed, cortex-agents automatically disables OpenCode's native `build` and `plan` agents (replaced by `implement` and `architect`). The `architect` agent becomes the default, promoting a planning-first workflow. Native agents are fully restored on `uninstall`.
 
@@ -68,25 +68,18 @@ Implement Agent                         loads plan, checks git status
    "Ready to finalize?"                 stages, commits, pushes, opens PR
 ```
 
-### Worktree Launcher
+### Worktree Support
 
-Create isolated development environments and launch them instantly:
+Create isolated development environments for parallel work:
 
-| Mode | What Happens |
-|------|-------------|
-| **IDE Terminal** | Opens in your detected IDE (VS Code, Cursor, Windsurf, Zed) with integrated terminal |
-| **New Terminal** | Opens a new terminal tab with OpenCode pre-configured in the worktree |
-| **In-App PTY** | Spawns an embedded terminal inside your current OpenCode session |
-| **Background** | AI implements headlessly while you keep working - toast notifications on completion |
+```
+Architect: "Plan saved. Create a worktree first?"
+  → worktree_create with plan-based name
+  → reports path: .worktrees/feature-user-auth/
+  → "Navigate to the worktree and start Implement agent"
+```
 
 Plans are automatically propagated into the worktree's `.cortex/plans/` so the new session has full context.
-
-**IDE-Aware Launch Options** — The launcher detects your development environment and offers contextual options:
-- **VS Code / Cursor / Windsurf / Zed**: "Open in [IDE] (Recommended)" as the first option
-- **JetBrains IDEs**: Terminal tab with manual IDE opening instructions
-- **Terminal only**: Standard terminal tab options
-
-**Cross-platform terminal support** via the terminal driver system — automatically detects and integrates with VS Code, Cursor, Windsurf, Zed, JetBrains IDEs, tmux, iTerm2, Terminal.app, kitty, wezterm, Konsole, and GNOME Terminal. Tabs opened by the launcher are tracked and automatically closed when the worktree is removed.
 
 ### Task Finalizer
 
@@ -118,27 +111,28 @@ All docs are saved to `docs/` with an auto-generated `INDEX.md`.
 
 ## Agents
 
-### Primary Agents
+### Primary Agents (3)
 
 Handle complex, multi-step work. Use your best model.
 
 | Agent | Role | Superpower |
 |-------|------|-----------|
-| **implement** | Full-access development | Skill-aware implementation, worktree launcher, quality gates, task finalizer |
-| **architect** | Read-only analysis | Architectural plans with mermaid diagrams, NFR analysis, hands off to implement |
-| **fix** | Deep troubleshooting | Performance debugging, distributed tracing, hotfix workflow |
-| **audit** | Code quality assessment | Tech debt scoring, pattern review, refactoring advisor (read-only) |
+| **architect** | Read-only analysis & entry point | Plans with mermaid diagrams, acceptance criteria, NFR analysis, delegates to implement |
+| **implement** | Full-access development | Skill-aware implementation, REPL loop with ACs, parallel quality gates, task finalizer |
+| **fix** | Quick turnaround bug fixes | Rapid diagnosis, optional REPL loop, delegates deep debugging to @debug |
 
-### Subagents
+### Subagents (6)
 
 Focused specialists launched **automatically** as parallel quality gates. Each auto-loads its core domain skill for deeper analysis. Use a fast/cheap model.
 
 | Agent | Role | Auto-Loads Skill | Triggered By |
 |-------|------|-----------------|-------------|
-| **@qa** | Writes tests, runs suite, reports coverage | `testing-strategies` | Implement (always), Fix (always) |
-| **@guard** | OWASP audit, secrets scan, code-level fix patches | `security-hardening` | Implement (always), Fix (if security-relevant) |
-| **@crosslayer** | Cross-layer implementation + feasibility analysis | Per-layer skills | Implement (multi-layer features), Architect (analysis) |
-| **@ship** | CI/CD validation, IaC review, deployment strategy | `deployment-automation` | Implement (when CI/Docker/infra files change) |
+| **@testing** | Writes tests, runs suite, reports coverage | `testing-strategies` | Implement (always), Fix (always) |
+| **@security** | OWASP audit, secrets scan, code-level fix patches | `security-hardening` | Implement (always), Fix (if security-relevant) |
+| **@audit** | Code quality, tech debt scoring, pattern review | `code-quality` | Implement (always) |
+| **@coder** | Cross-layer implementation + feasibility analysis | Per-layer skills | Implement (multi-layer features), Architect (analysis) |
+| **@devops** | CI/CD validation, IaC review, deployment strategy | `deployment-automation` | Implement (when CI/Docker/infra files change) |
+| **@debug** | Root cause analysis, log analysis, troubleshooting | `testing-strategies` | Fix (complex issues) |
 
 Subagents return **structured reports** with severity levels (`BLOCKING`, `CRITICAL`, `HIGH`, `MEDIUM`, `LOW`) that the orchestrating agent uses to decide whether to proceed or fix issues first.
 
@@ -156,7 +150,7 @@ Implement Agent detects: package.json has React + Express + Prisma
 
 ## Tools
 
-32 tools bundled and auto-registered. No configuration needed.
+29 tools bundled and auto-registered. No configuration needed.
 
 <table>
 <tr><td width="50%">
@@ -165,8 +159,7 @@ Implement Agent detects: package.json has React + Express + Prisma
 - `branch_status` - Current branch + change detection
 - `branch_create` - Convention-named branches (with toast notifications)
 - `branch_switch` - Safe branch switching
-- `worktree_create` - Isolated worktree in `.worktrees/` (with toast notifications)
-- `worktree_launch` - Launch worktree (terminal/PTY/background)
+- `worktree_create` - Isolated worktree in `.worktrees/`
 - `worktree_list` / `worktree_remove` / `worktree_open`
 
 </td><td width="50%">
@@ -175,7 +168,6 @@ Implement Agent detects: package.json has React + Express + Prisma
 - `plan_save` / `plan_load` / `plan_list` / `plan_delete`
 - `session_save` / `session_list` / `session_load`
 - `cortex_init` / `cortex_status` / `cortex_configure`
-- `detect_environment` - Detect IDE/terminal for contextual launch options
 
 </td></tr>
 <tr><td width="50%">
@@ -210,12 +202,12 @@ The architect agent uses these tools to browse your backlog and seed plans from 
 <tr><td colspan="2">
 
 **REPL Loop** (Iterative Task-by-Task Implementation)
-- `repl_init` - Initialize a loop from a plan (parses tasks, auto-detects build/test commands)
-- `repl_status` - Get current progress, active task, retry counts (auto-advances to next task)
+- `repl_init` - Initialize a loop from a plan (parses tasks + acceptance criteria, auto-detects build/test commands)
+- `repl_status` - Get current progress, active task with ACs, retry counts (auto-advances to next task)
 - `repl_report` - Report task outcome (`pass`/`fail`/`skip`) with auto-retry and escalation
-- `repl_summary` - Generate markdown summary table for PR body
+- `repl_summary` - Generate markdown summary table with AC satisfaction for PR body
 
-The implement agent uses these tools to work through plan tasks one at a time, running build+test verification after each task. Failed tasks are automatically retried (up to a configurable limit) before escalating to the user. State is persisted to `.cortex/repl-state.json` so progress survives context compaction and session restarts.
+The implement agent uses these tools to work through plan tasks one at a time, running build+test verification after each task. Each task can have **acceptance criteria** (`- AC:` lines in the plan) displayed during implementation. Failed tasks are automatically retried (up to a configurable limit) before escalating to the user. State is persisted to `.cortex/repl-state.json` so progress survives context compaction and session restarts.
 
 </td></tr>
 </table>
@@ -255,7 +247,7 @@ npx cortex-agents configure --project  # Per-project (saves to .opencode/models.
 ```
 
 ```
-? Select model for PRIMARY agents:
+? Select model for PRIMARY agents (architect, implement, fix):
   Claude Sonnet 4    (anthropic)     Best balance of intelligence and speed
   Claude Opus 4      (anthropic)     Most capable, best for complex architecture
   GPT-4.1            (openai)        Fast multimodal model
@@ -263,7 +255,7 @@ npx cortex-agents configure --project  # Per-project (saves to .opencode/models.
   Kimi K2P5          (kimi)          Optimized for code generation
   Enter custom model ID
 
-? Select model for SUBAGENTS:
+? Select model for SUBAGENTS (debug, coder, testing, security, devops, audit):
   Claude 3.5 Haiku   (anthropic)     Fast and cost-effective
   o4 Mini            (openai)        Fast reasoning, cost-effective
   Gemini 2.5 Flash   (google)        Fast and efficient
@@ -346,20 +338,19 @@ Step 1   branch_status           Am I on a protected branch?
 Step 2   cortex_status           Is .cortex initialized? Offer model config if new project.
 Step 3   plan_list / plan_load   Is there a plan for this work?
 Step 4   Ask: strategy           Worktree (recommended) or branch?
-Step 4b  Ask: launch mode        Terminal tab (recommended) / stay / PTY / background?
-Step 5   Execute                 Create worktree/branch, auto-detect terminal
+Step 5   Execute                 Create worktree/branch
 Step 6   REPL Loop               If plan loaded: repl_init → iterate tasks one-by-one
-  6a     repl_init               Parse plan tasks, auto-detect build/test commands
-  6b     repl_status             Get current task, auto-advance from pending
-  6c     Implement task          Write code for the current task only
+  6a     repl_init               Parse plan tasks + acceptance criteria, auto-detect build/test
+  6b     repl_status             Get current task with ACs, auto-advance from pending
+  6c     Implement task          Write code to satisfy acceptance criteria
   6d     Build + test            Run detected build/test commands
   6e     repl_report             Report pass/fail/skip → auto-advance or retry
   6f     Repeat 6b-6e            Until all tasks done or user intervenes
-Step 7   Quality Gate            Launch @qa + @guard in parallel (includes repl_summary)
+Step 7   Quality Gate            Launch @testing + @security + @audit in parallel (+ repl_summary)
 Step 8   Ask: documentation      Decision doc / feature doc / flow doc?
 Step 9   session_save            Record what was done and why
 Step 10  task_finalize           Commit, push, create PR
-Step 11  Ask: cleanup            Remove worktree + close terminal tab? (if applicable)
+Step 11  Ask: cleanup            Remove worktree? (if applicable)
 ```
 
 This isn't just documentation - it's enforced by the agent's instructions. The AI follows this workflow every time.
@@ -371,22 +362,22 @@ After implementation (Step 7), the implement agent **automatically** launches su
 ```
 Implement Agent completes implementation
    |
-   +-- launches in parallel (single message) --+
-   |                                            |
-   v                                            v
-@qa                                        @guard
-  Writes unit tests                          OWASP audit
-  Runs test suite                            Secrets scan
-  Reports coverage                           Severity ratings
-  Returns: PASS/FAIL                         Returns: PASS/FAIL
-   |                                            |
-   +------ results reviewed by Implement ------+
+   +-- launches in parallel (single message) -----+------------------+
+   |                                               |                  |
+   v                                               v                  v
+@testing                                      @security            @audit
+  Writes unit tests                             OWASP audit          Code quality
+  Runs test suite                               Secrets scan         Tech debt score
+  Reports coverage                              Severity ratings     Pattern review
+  Returns: PASS/FAIL                            Returns: PASS/FAIL   Returns: A-F grade
+   |                                               |                  |
+   +------------- results reviewed by Implement ---+------------------+
    |
    v
 Quality Gate Summary included in PR body
 ```
 
-The fix agent uses the same pattern: `@qa` for regression tests (always) and `@guard` when the fix touches sensitive code.
+The fix agent uses a similar pattern: `@testing` for regression tests (always) and `@security` when the fix touches sensitive code. Complex issues are delegated to `@debug` for root cause analysis before fixing.
 
 Sub-agents use **structured return contracts** so results are actionable:
 - `BLOCKING` / `CRITICAL` / `HIGH` findings block finalization
@@ -399,12 +390,15 @@ When a plan is loaded, the implement agent activates a **Read-Eval-Print Loop** 
 
 ```
 repl_init("my-plan.md")
-  → Parses plan tasks (- [ ] checkboxes)
+  → Parses plan tasks (- [ ] checkboxes) with acceptance criteria (- AC: lines)
   → Auto-detects: npm run build, npx vitest run (vitest)
   → Creates .cortex/repl-state.json
 
 Loop:
   repl_status                    → "Task #1: Implement user model"
+                                    Acceptance Criteria:
+                                      - User model schema includes name, email, password
+                                      - Email validation rejects malformed addresses
   [agent implements task]
   [agent runs build + tests]
   repl_report(pass, "42 tests pass")  → "✓ Task #1 PASSED (1st attempt)"
@@ -421,11 +415,23 @@ Loop:
                                    → "→ Next: Task #3"
   ...
 
-repl_summary                     → Markdown table for PR body
+repl_summary                     → Markdown table with AC satisfaction for PR body
+```
+
+**Plan AC format** (used by Architect when creating plans):
+```markdown
+## Tasks
+- [ ] Task 1: Implement user model
+  - AC: User model schema includes name, email, password fields
+  - AC: Email validation rejects malformed addresses
+  - AC: Passwords hashed with bcrypt before storage
+- [ ] Task 2: Add API endpoints
+  - AC: POST /users returns 201 on success
 ```
 
 **Key behaviors:**
 - **Opt-in**: Only activates when a plan is loaded. No-plan sessions use the standard linear workflow.
+- **Acceptance criteria**: Each task can have `- AC:` lines that are displayed during implementation and tracked in the summary.
 - **Auto-detection**: Scans `package.json`, `Cargo.toml`, `go.mod`, `pyproject.toml`, `Makefile`, `mix.exs` for build/test/lint commands.
 - **Retry with escalation**: Failed tasks retry up to `maxRetries` (default: 3) before asking the user how to proceed.
 - **Persistent state**: Progress saved to `.cortex/repl-state.json` — survives context compaction, session restarts, and agent switches.
@@ -436,13 +442,12 @@ repl_summary                     → Markdown table for PR body
 When agents switch, a toast notification tells you what mode you're in:
 
 ```
-Agent: implement              Development mode - ready to implement
-Agent: architect             Planning mode - read-only analysis
-Agent: fix                   Debug mode - troubleshooting and fixes
-Agent: audit                 Review mode - code quality assessment
+Agent: architect             Planning mode — read-only analysis
+Agent: implement             Development mode — ready to implement
+Agent: fix                   Quick fix mode — fast turnaround
 ```
 
-The Architect agent creates plans with mermaid diagrams and hands off to Implement. Implement loads the plan, detects the tech stack, loads relevant skills, and implements. If something breaks, Fix takes over with performance debugging tools. Audit provides code quality assessment and tech debt analysis on demand.
+The Architect agent is the entry point — it creates plans with mermaid diagrams, acceptance criteria, and hands off to Implement. Implement loads the plan, detects the tech stack, loads relevant skills, and implements task by task. If something breaks, Fix takes over for quick turnaround, delegating deep debugging to the @debug sub-agent when needed.
 
 <br>
 
@@ -486,7 +491,6 @@ cd ~/.config/opencode && npm unlink cortex-agents && npm install
 
 - **New skills** - Domain-specific knowledge packs (e.g., Rust, Go, DevOps for AWS)
 - **New agents** - Specialized agents (e.g., reviewer, migration, docs-writer)
-- **Terminal drivers** - Improve detection/support for additional terminal emulators
 - **Tool improvements** - Better PR templates, test runners, linter integration
 - **Bug fixes** - Anything that doesn't work as expected
 

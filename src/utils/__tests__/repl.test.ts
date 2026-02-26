@@ -4,6 +4,7 @@ import * as path from "path";
 import * as os from "os";
 import {
   parseTasksFromPlan,
+  parseTasksWithAC,
   detectCommands,
   readReplState,
   writeReplState,
@@ -32,9 +33,9 @@ function makeState(overrides: Partial<ReplState> = {}): ReplState {
     maxRetries: 3,
     currentTaskIndex: -1,
     tasks: [
-      { index: 0, description: "Task A", status: "pending", retries: 0, iterations: [] },
-      { index: 1, description: "Task B", status: "pending", retries: 0, iterations: [] },
-      { index: 2, description: "Task C", status: "pending", retries: 0, iterations: [] },
+      { index: 0, description: "Task A", acceptanceCriteria: [], status: "pending", retries: 0, iterations: [] },
+      { index: 1, description: "Task B", acceptanceCriteria: [], status: "pending", retries: 0, iterations: [] },
+      { index: 2, description: "Task C", acceptanceCriteria: [], status: "pending", retries: 0, iterations: [] },
     ],
     ...overrides,
   };
@@ -341,9 +342,9 @@ describe("state management", () => {
   it("getNextTask returns first pending task", () => {
     const state = makeState({
       tasks: [
-        { index: 0, description: "A", status: "passed", retries: 0, iterations: [] },
-        { index: 1, description: "B", status: "pending", retries: 0, iterations: [] },
-        { index: 2, description: "C", status: "pending", retries: 0, iterations: [] },
+        { index: 0, description: "A", acceptanceCriteria: [], status: "passed", retries: 0, iterations: [] },
+        { index: 1, description: "B", acceptanceCriteria: [], status: "pending", retries: 0, iterations: [] },
+        { index: 2, description: "C", acceptanceCriteria: [], status: "pending", retries: 0, iterations: [] },
       ],
     });
     const next = getNextTask(state);
@@ -354,9 +355,9 @@ describe("state management", () => {
   it("getNextTask returns null when all done", () => {
     const state = makeState({
       tasks: [
-        { index: 0, description: "A", status: "passed", retries: 0, iterations: [] },
-        { index: 1, description: "B", status: "failed", retries: 3, iterations: [] },
-        { index: 2, description: "C", status: "skipped", retries: 0, iterations: [] },
+        { index: 0, description: "A", acceptanceCriteria: [], status: "passed", retries: 0, iterations: [] },
+        { index: 1, description: "B", acceptanceCriteria: [], status: "failed", retries: 3, iterations: [] },
+        { index: 2, description: "C", acceptanceCriteria: [], status: "skipped", retries: 0, iterations: [] },
       ],
     });
     expect(getNextTask(state)).toBeNull();
@@ -365,9 +366,9 @@ describe("state management", () => {
   it("getCurrentTask returns in_progress task", () => {
     const state = makeState({
       tasks: [
-        { index: 0, description: "A", status: "passed", retries: 0, iterations: [] },
-        { index: 1, description: "B", status: "in_progress", retries: 0, iterations: [] },
-        { index: 2, description: "C", status: "pending", retries: 0, iterations: [] },
+        { index: 0, description: "A", acceptanceCriteria: [], status: "passed", retries: 0, iterations: [] },
+        { index: 1, description: "B", acceptanceCriteria: [], status: "in_progress", retries: 0, iterations: [] },
+        { index: 2, description: "C", acceptanceCriteria: [], status: "pending", retries: 0, iterations: [] },
       ],
     });
     const current = getCurrentTask(state);
@@ -386,9 +387,9 @@ describe("state management", () => {
   it("isLoopComplete returns true when all done", () => {
     const state = makeState({
       tasks: [
-        { index: 0, description: "A", status: "passed", retries: 0, iterations: [] },
-        { index: 1, description: "B", status: "failed", retries: 3, iterations: [] },
-        { index: 2, description: "C", status: "skipped", retries: 0, iterations: [] },
+        { index: 0, description: "A", acceptanceCriteria: [], status: "passed", retries: 0, iterations: [] },
+        { index: 1, description: "B", acceptanceCriteria: [], status: "failed", retries: 3, iterations: [] },
+        { index: 2, description: "C", acceptanceCriteria: [], status: "skipped", retries: 0, iterations: [] },
       ],
     });
     expect(isLoopComplete(state)).toBe(true);
@@ -397,8 +398,8 @@ describe("state management", () => {
   it("isLoopComplete returns false when task in_progress", () => {
     const state = makeState({
       tasks: [
-        { index: 0, description: "A", status: "passed", retries: 0, iterations: [] },
-        { index: 1, description: "B", status: "in_progress", retries: 0, iterations: [] },
+        { index: 0, description: "A", acceptanceCriteria: [], status: "passed", retries: 0, iterations: [] },
+        { index: 1, description: "B", acceptanceCriteria: [], status: "in_progress", retries: 0, iterations: [] },
       ],
     });
     expect(isLoopComplete(state)).toBe(false);
@@ -411,9 +412,9 @@ describe("formatProgress", () => {
   it("shows correct progress counts", () => {
     const state = makeState({
       tasks: [
-        { index: 0, description: "A", status: "passed", retries: 0, iterations: [{ at: "t", result: "pass", detail: "" }] },
-        { index: 1, description: "B", status: "in_progress", retries: 1, iterations: [{ at: "t", result: "fail", detail: "" }] },
-        { index: 2, description: "C", status: "pending", retries: 0, iterations: [] },
+        { index: 0, description: "A", acceptanceCriteria: [], status: "passed", retries: 0, iterations: [{ at: "t", result: "pass", detail: "" }] },
+        { index: 1, description: "B", acceptanceCriteria: [], status: "in_progress", retries: 1, iterations: [{ at: "t", result: "fail", detail: "" }] },
+        { index: 2, description: "C", acceptanceCriteria: [], status: "pending", retries: 0, iterations: [] },
       ],
     });
 
@@ -429,9 +430,9 @@ describe("formatProgress", () => {
     const state = makeState({
       currentTaskIndex: 1,
       tasks: [
-        { index: 0, description: "A", status: "passed", retries: 0, iterations: [] },
-        { index: 1, description: "Task B desc", status: "in_progress", retries: 2, iterations: [] },
-        { index: 2, description: "C", status: "pending", retries: 0, iterations: [] },
+        { index: 0, description: "A", acceptanceCriteria: [], status: "passed", retries: 0, iterations: [] },
+        { index: 1, description: "Task B desc", acceptanceCriteria: [], status: "in_progress", retries: 2, iterations: [] },
+        { index: 2, description: "C", acceptanceCriteria: [], status: "pending", retries: 0, iterations: [] },
       ],
     });
 
@@ -443,9 +444,9 @@ describe("formatProgress", () => {
   it("shows 'All tasks complete' when done", () => {
     const state = makeState({
       tasks: [
-        { index: 0, description: "A", status: "passed", retries: 0, iterations: [] },
-        { index: 1, description: "B", status: "passed", retries: 0, iterations: [] },
-        { index: 2, description: "C", status: "passed", retries: 0, iterations: [] },
+        { index: 0, description: "A", acceptanceCriteria: [], status: "passed", retries: 0, iterations: [] },
+        { index: 1, description: "B", acceptanceCriteria: [], status: "passed", retries: 0, iterations: [] },
+        { index: 2, description: "C", acceptanceCriteria: [], status: "passed", retries: 0, iterations: [] },
       ],
     });
 
@@ -457,9 +458,9 @@ describe("formatProgress", () => {
   it("shows task history with status icons", () => {
     const state = makeState({
       tasks: [
-        { index: 0, description: "Passed task", status: "passed", retries: 0, iterations: [{ at: "t", result: "pass", detail: "" }] },
-        { index: 1, description: "Failed task", status: "failed", retries: 3, iterations: [] },
-        { index: 2, description: "Skipped task", status: "skipped", retries: 0, iterations: [] },
+        { index: 0, description: "Passed task", acceptanceCriteria: [], status: "passed", retries: 0, iterations: [{ at: "t", result: "pass", detail: "" }] },
+        { index: 1, description: "Failed task", acceptanceCriteria: [], status: "failed", retries: 3, iterations: [] },
+        { index: 2, description: "Skipped task", acceptanceCriteria: [], status: "skipped", retries: 0, iterations: [] },
       ],
     });
 
@@ -476,9 +477,9 @@ describe("formatSummary", () => {
     const state = makeState({
       completedAt: "2026-01-01T00:12:00Z",
       tasks: [
-        { index: 0, description: "Task A", status: "passed", retries: 0, iterations: [{ at: "t", result: "pass", detail: "" }] },
-        { index: 1, description: "Task B", status: "passed", retries: 1, iterations: [{ at: "t", result: "fail", detail: "" }, { at: "t", result: "pass", detail: "" }] },
-        { index: 2, description: "Task C", status: "skipped", retries: 0, iterations: [] },
+        { index: 0, description: "Task A", acceptanceCriteria: [], status: "passed", retries: 0, iterations: [{ at: "t", result: "pass", detail: "" }] },
+        { index: 1, description: "Task B", acceptanceCriteria: [], status: "passed", retries: 1, iterations: [{ at: "t", result: "fail", detail: "" }, { at: "t", result: "pass", detail: "" }] },
+        { index: 2, description: "Task C", acceptanceCriteria: [], status: "skipped", retries: 0, iterations: [] },
       ],
     });
 
@@ -497,6 +498,7 @@ describe("formatSummary", () => {
         {
           index: 0,
           description: "Failing task",
+          acceptanceCriteria: [],
           status: "failed",
           retries: 3,
           iterations: [
@@ -528,6 +530,7 @@ describe("formatSummary", () => {
         {
           index: 0,
           description: "A".repeat(100),
+          acceptanceCriteria: [],
           status: "passed",
           retries: 0,
           iterations: [{ at: "t", result: "pass", detail: "" }],
@@ -561,6 +564,7 @@ describe("formatSummary", () => {
         {
           index: 0,
           description: "Active task",
+          acceptanceCriteria: [],
           status: "in_progress",
           retries: 0,
           iterations: [{ at: "t", result: "fail", detail: "first try" }],
@@ -579,6 +583,7 @@ describe("formatSummary", () => {
         {
           index: 0,
           description: "Not started",
+          acceptanceCriteria: [],
           status: "pending",
           retries: 0,
           iterations: [],
@@ -608,6 +613,7 @@ describe("formatSummary", () => {
         {
           index: 0,
           description: "Failing task",
+          acceptanceCriteria: [],
           status: "failed",
           retries: 3,
           iterations: [
@@ -824,7 +830,7 @@ describe("formatProgress edge cases", () => {
   it("shows next task when no current task and tasks pending", () => {
     const state = makeState({
       tasks: [
-        { index: 0, description: "Next up", status: "pending", retries: 0, iterations: [] },
+        { index: 0, description: "Next up", acceptanceCriteria: [], status: "pending", retries: 0, iterations: [] },
       ],
     });
 
@@ -858,6 +864,7 @@ describe("formatProgress edge cases", () => {
         {
           index: 0,
           description: "Retried task",
+          acceptanceCriteria: [],
           status: "passed",
           retries: 2,
           iterations: [
@@ -880,6 +887,7 @@ describe("formatProgress edge cases", () => {
         {
           index: 0,
           description: "One retry task",
+          acceptanceCriteria: [],
           status: "passed",
           retries: 1,
           iterations: [
@@ -901,6 +909,7 @@ describe("formatProgress edge cases", () => {
         {
           index: 0,
           description: "Single try",
+          acceptanceCriteria: [],
           status: "passed",
           retries: 0,
           iterations: [{ at: "t", result: "pass", detail: "" }],
@@ -911,5 +920,201 @@ describe("formatProgress edge cases", () => {
     const output = formatProgress(state);
     expect(output).toContain("1 iteration)");
     expect(output).not.toContain("1 iterations");
+  });
+});
+
+// ─── parseTasksWithAC ─────────────────────────────────────────────────────────
+
+describe("parseTasksWithAC", () => {
+  it("extracts tasks with acceptance criteria", () => {
+    const content = `## Tasks
+
+- [ ] Task 1: Implement user model
+  - AC: User model schema includes name, email, password fields
+  - AC: Email validation rejects malformed addresses
+  - AC: Passwords hashed with bcrypt before storage
+- [ ] Task 2: Add API endpoint
+  - AC: POST /users returns 201 on success
+`;
+    const tasks = parseTasksWithAC(content);
+    expect(tasks).toHaveLength(2);
+    expect(tasks[0].description).toBe("Implement user model");
+    expect(tasks[0].acceptanceCriteria).toEqual([
+      "User model schema includes name, email, password fields",
+      "Email validation rejects malformed addresses",
+      "Passwords hashed with bcrypt before storage",
+    ]);
+    expect(tasks[1].description).toBe("Add API endpoint");
+    expect(tasks[1].acceptanceCriteria).toEqual([
+      "POST /users returns 201 on success",
+    ]);
+  });
+
+  it("returns empty acceptanceCriteria when no AC lines present", () => {
+    const content = `## Tasks
+
+- [ ] Simple task without ACs
+- [ ] Another simple task
+`;
+    const tasks = parseTasksWithAC(content);
+    expect(tasks).toHaveLength(2);
+    expect(tasks[0].acceptanceCriteria).toEqual([]);
+    expect(tasks[1].acceptanceCriteria).toEqual([]);
+  });
+
+  it("handles mixed tasks with and without ACs", () => {
+    const content = `## Tasks
+
+- [ ] Task with ACs
+  - AC: First criterion
+- [ ] Task without ACs
+- [ ] Another task with ACs
+  - AC: Second criterion
+`;
+    const tasks = parseTasksWithAC(content);
+    expect(tasks).toHaveLength(3);
+    expect(tasks[0].acceptanceCriteria).toEqual(["First criterion"]);
+    expect(tasks[1].acceptanceCriteria).toEqual([]);
+    expect(tasks[2].acceptanceCriteria).toEqual(["Second criterion"]);
+  });
+
+  it("handles blank lines between AC lines", () => {
+    const content = `## Tasks
+
+- [ ] Task with spaced ACs
+  - AC: First criterion
+
+  - AC: Second criterion
+`;
+    const tasks = parseTasksWithAC(content);
+    expect(tasks[0].acceptanceCriteria).toEqual([
+      "First criterion",
+      "Second criterion",
+    ]);
+  });
+
+  it("stops collecting ACs at next task checkbox", () => {
+    const content = `## Tasks
+
+- [ ] First task
+  - AC: Belongs to first
+- [ ] Second task
+  - AC: Belongs to second
+`;
+    const tasks = parseTasksWithAC(content);
+    expect(tasks[0].acceptanceCriteria).toEqual(["Belongs to first"]);
+    expect(tasks[1].acceptanceCriteria).toEqual(["Belongs to second"]);
+  });
+
+  it("handles asterisk AC markers", () => {
+    const content = `## Tasks
+
+- [ ] Task
+  * AC: Asterisk criterion
+`;
+    const tasks = parseTasksWithAC(content);
+    expect(tasks[0].acceptanceCriteria).toEqual(["Asterisk criterion"]);
+  });
+
+  it("is backward-compatible with parseTasksFromPlan", () => {
+    const content = `## Tasks
+
+- [ ] Task 1: Description
+  - AC: Some criterion
+- [ ] Task 2: Another
+`;
+    const descriptions = parseTasksFromPlan(content);
+    const withAC = parseTasksWithAC(content);
+    expect(descriptions).toEqual(withAC.map((t) => t.description));
+  });
+});
+
+// ─── formatProgress with acceptance criteria ──────────────────────────────────
+
+describe("formatProgress with acceptance criteria", () => {
+  it("shows acceptance criteria for current task", () => {
+    const state = makeState({
+      tasks: [
+        {
+          index: 0,
+          description: "Task with ACs",
+          acceptanceCriteria: ["First AC", "Second AC"],
+          status: "in_progress",
+          retries: 0,
+          iterations: [],
+        },
+      ],
+    });
+
+    const output = formatProgress(state);
+    expect(output).toContain("Acceptance Criteria:");
+    expect(output).toContain("- First AC");
+    expect(output).toContain("- Second AC");
+  });
+
+  it("does not show acceptance criteria section when empty", () => {
+    const state = makeState({
+      tasks: [
+        {
+          index: 0,
+          description: "Task without ACs",
+          acceptanceCriteria: [],
+          status: "in_progress",
+          retries: 0,
+          iterations: [],
+        },
+      ],
+    });
+
+    const output = formatProgress(state);
+    expect(output).not.toContain("Acceptance Criteria:");
+  });
+});
+
+// ─── formatSummary with acceptance criteria ───────────────────────────────────
+
+describe("formatSummary with acceptance criteria", () => {
+  it("shows AC counts when tasks have acceptance criteria", () => {
+    const state = makeState({
+      tasks: [
+        {
+          index: 0,
+          description: "Passed task",
+          acceptanceCriteria: ["AC1", "AC2"],
+          status: "passed",
+          retries: 0,
+          iterations: [{ at: "t", result: "pass", detail: "" }],
+        },
+        {
+          index: 1,
+          description: "Failed task",
+          acceptanceCriteria: ["AC3"],
+          status: "failed",
+          retries: 3,
+          iterations: [{ at: "t", result: "fail", detail: "err" }],
+        },
+      ],
+    });
+
+    const output = formatSummary(state);
+    expect(output).toContain("ACs: 2/3 satisfied");
+  });
+
+  it("omits AC counts when no tasks have acceptance criteria", () => {
+    const state = makeState({
+      tasks: [
+        {
+          index: 0,
+          description: "Task",
+          acceptanceCriteria: [],
+          status: "passed",
+          retries: 0,
+          iterations: [{ at: "t", result: "pass", detail: "" }],
+        },
+      ],
+    });
+
+    const output = formatSummary(state);
+    expect(output).not.toContain("ACs:");
   });
 });

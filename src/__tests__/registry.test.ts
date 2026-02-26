@@ -13,11 +13,11 @@ import {
 describe("Agent Constants", () => {
   describe("PRIMARY_AGENTS", () => {
     it("contains the correct primary agent names", () => {
-      expect(PRIMARY_AGENTS).toEqual(["implement", "architect", "fix", "audit"]);
+      expect(PRIMARY_AGENTS).toEqual(["architect", "implement", "fix"]);
     });
 
-    it("has 4 primary agents", () => {
-      expect(PRIMARY_AGENTS).toHaveLength(4);
+    it("has 3 primary agents", () => {
+      expect(PRIMARY_AGENTS).toHaveLength(3);
     });
 
     it("is a readonly tuple", () => {
@@ -28,11 +28,11 @@ describe("Agent Constants", () => {
 
   describe("SUBAGENTS", () => {
     it("contains the correct subagent names", () => {
-      expect(SUBAGENTS).toEqual(["crosslayer", "qa", "guard", "ship"]);
+      expect(SUBAGENTS).toEqual(["debug", "coder", "testing", "security", "devops", "audit"]);
     });
 
-    it("has 4 subagents", () => {
-      expect(SUBAGENTS).toHaveLength(4);
+    it("has 6 subagents", () => {
+      expect(SUBAGENTS).toHaveLength(6);
     });
 
     it("is a readonly tuple", () => {
@@ -43,19 +43,20 @@ describe("Agent Constants", () => {
   describe("ALL_AGENTS", () => {
     it("contains all primary and subagent names", () => {
       expect(ALL_AGENTS).toEqual([
-        "implement",
         "architect",
+        "implement",
         "fix",
+        "debug",
+        "coder",
+        "testing",
+        "security",
+        "devops",
         "audit",
-        "crosslayer",
-        "qa",
-        "guard",
-        "ship",
       ]);
     });
 
-    it("has 8 total agents", () => {
-      expect(ALL_AGENTS).toHaveLength(8);
+    it("has 9 total agents", () => {
+      expect(ALL_AGENTS).toHaveLength(9);
     });
 
     it("includes all primary agents", () => {
@@ -147,11 +148,14 @@ describe("STALE_AGENT_FILES", () => {
   it("contains old agent filenames for cleanup", () => {
     expect(STALE_AGENT_FILES).toContain("build.md");
     expect(STALE_AGENT_FILES).toContain("plan.md");
-    expect(STALE_AGENT_FILES).toContain("debug.md");
     expect(STALE_AGENT_FILES).toContain("review.md");
+    expect(STALE_AGENT_FILES).toContain("crosslayer.md");
+    expect(STALE_AGENT_FILES).toContain("qa.md");
+    expect(STALE_AGENT_FILES).toContain("guard.md");
+    expect(STALE_AGENT_FILES).toContain("ship.md");
   });
 
-  it("has 8 stale files", () => {
+  it("has correct number of stale files", () => {
     expect(STALE_AGENT_FILES).toHaveLength(8);
   });
 

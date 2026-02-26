@@ -46,6 +46,7 @@ vi.mock("fs", async () => {
 
 vi.mock("../../utils/repl.js", () => ({
   parseTasksFromPlan: vi.fn(),
+  parseTasksWithAC: vi.fn(),
   detectCommands: vi.fn(),
   readReplState: vi.fn(),
   writeReplState: vi.fn(),
@@ -60,6 +61,7 @@ vi.mock("../../utils/repl.js", () => ({
 const fs = await import("fs");
 const {
   parseTasksFromPlan,
+  parseTasksWithAC,
   detectCommands,
   readReplState,
   writeReplState,
@@ -72,6 +74,7 @@ const {
 const replTools = await import("../repl.js");
 
 const mockParseTasksFromPlan = vi.mocked(parseTasksFromPlan);
+const mockParseTasksWithAC = vi.mocked(parseTasksWithAC);
 const mockDetectCommands = vi.mocked(detectCommands);
 const mockReadReplState = vi.mocked(readReplState);
 const mockWriteReplState = vi.mocked(writeReplState);
@@ -259,7 +262,7 @@ describe("repl_init execution", () => {
   it("returns error when plan has no tasks", async () => {
     mockExistsSync.mockReturnValue(true);
     mockReadFileSync.mockReturnValue("# Empty Plan\n\nNo tasks here.");
-    mockParseTasksFromPlan.mockReturnValue([]);
+    mockParseTasksWithAC.mockReturnValue([]);
 
     const result = await replTools.init.execute(
       { planFilename: "empty-plan.md" },
@@ -273,7 +276,10 @@ describe("repl_init execution", () => {
   it("initializes loop with auto-detected commands", async () => {
     mockExistsSync.mockReturnValue(true);
     mockReadFileSync.mockReturnValue("## Tasks\n- [ ] Task A\n- [ ] Task B");
-    mockParseTasksFromPlan.mockReturnValue(["Task A", "Task B"]);
+    mockParseTasksWithAC.mockReturnValue([
+      { description: "Task A", acceptanceCriteria: [] },
+      { description: "Task B", acceptanceCriteria: [] },
+    ]);
     mockDetectCommands.mockResolvedValue(makeDetection());
 
     const result = await replTools.init.execute(
@@ -293,7 +299,7 @@ describe("repl_init execution", () => {
   it("uses override commands when provided", async () => {
     mockExistsSync.mockReturnValue(true);
     mockReadFileSync.mockReturnValue("## Tasks\n- [ ] Task A");
-    mockParseTasksFromPlan.mockReturnValue(["Task A"]);
+    mockParseTasksWithAC.mockReturnValue([{ description: "Task A", acceptanceCriteria: [] }]);
     mockDetectCommands.mockResolvedValue(makeDetection());
 
     const result = await replTools.init.execute(
@@ -313,7 +319,7 @@ describe("repl_init execution", () => {
   it("uses custom maxRetries when provided", async () => {
     mockExistsSync.mockReturnValue(true);
     mockReadFileSync.mockReturnValue("## Tasks\n- [ ] Task A");
-    mockParseTasksFromPlan.mockReturnValue(["Task A"]);
+    mockParseTasksWithAC.mockReturnValue([{ description: "Task A", acceptanceCriteria: [] }]);
     mockDetectCommands.mockResolvedValue(makeDetection());
 
     const result = await replTools.init.execute(
@@ -331,7 +337,7 @@ describe("repl_init execution", () => {
   it("shows 'Not detected' when no commands found", async () => {
     mockExistsSync.mockReturnValue(true);
     mockReadFileSync.mockReturnValue("## Tasks\n- [ ] Task A");
-    mockParseTasksFromPlan.mockReturnValue(["Task A"]);
+    mockParseTasksWithAC.mockReturnValue([{ description: "Task A", acceptanceCriteria: [] }]);
     mockDetectCommands.mockResolvedValue(
       makeDetection({ detected: false, framework: "unknown", buildCommand: null, testCommand: null }),
     );
@@ -348,7 +354,10 @@ describe("repl_init execution", () => {
   it("writes state with correct initial structure", async () => {
     mockExistsSync.mockReturnValue(true);
     mockReadFileSync.mockReturnValue("## Tasks\n- [ ] Task A\n- [ ] Task B");
-    mockParseTasksFromPlan.mockReturnValue(["Task A", "Task B"]);
+    mockParseTasksWithAC.mockReturnValue([
+      { description: "Task A", acceptanceCriteria: [] },
+      { description: "Task B", acceptanceCriteria: [] },
+    ]);
     mockDetectCommands.mockResolvedValue(makeDetection());
 
     await replTools.init.execute(
@@ -387,7 +396,7 @@ describe("repl_init execution", () => {
   it("shows lint command when detected", async () => {
     mockExistsSync.mockReturnValue(true);
     mockReadFileSync.mockReturnValue("## Tasks\n- [ ] Task A");
-    mockParseTasksFromPlan.mockReturnValue(["Task A"]);
+    mockParseTasksWithAC.mockReturnValue([{ description: "Task A", acceptanceCriteria: [] }]);
     mockDetectCommands.mockResolvedValue(
       makeDetection({ lintCommand: "npm run lint" }),
     );
@@ -947,7 +956,7 @@ describe("repl_init edge cases", () => {
   it("initializes with a single task plan", async () => {
     mockExistsSync.mockReturnValue(true);
     mockReadFileSync.mockReturnValue("## Tasks\n- [ ] Only task");
-    mockParseTasksFromPlan.mockReturnValue(["Only task"]);
+    mockParseTasksWithAC.mockReturnValue([{ description: "Only task", acceptanceCriteria: [] }]);
     mockDetectCommands.mockResolvedValue(makeDetection());
 
     const result = await replTools.init.execute(
@@ -964,7 +973,7 @@ describe("repl_init edge cases", () => {
   it("uses default maxRetries of 3 when not provided", async () => {
     mockExistsSync.mockReturnValue(true);
     mockReadFileSync.mockReturnValue("## Tasks\n- [ ] Task A");
-    mockParseTasksFromPlan.mockReturnValue(["Task A"]);
+    mockParseTasksWithAC.mockReturnValue([{ description: "Task A", acceptanceCriteria: [] }]);
     mockDetectCommands.mockResolvedValue(makeDetection());
 
     await replTools.init.execute(
@@ -979,7 +988,7 @@ describe("repl_init edge cases", () => {
   it("sets startedAt to current ISO timestamp", async () => {
     mockExistsSync.mockReturnValue(true);
     mockReadFileSync.mockReturnValue("## Tasks\n- [ ] Task A");
-    mockParseTasksFromPlan.mockReturnValue(["Task A"]);
+    mockParseTasksWithAC.mockReturnValue([{ description: "Task A", acceptanceCriteria: [] }]);
     mockDetectCommands.mockResolvedValue(makeDetection());
 
     await replTools.init.execute(
@@ -996,7 +1005,7 @@ describe("repl_init edge cases", () => {
   it("does not set completedAt on initialization", async () => {
     mockExistsSync.mockReturnValue(true);
     mockReadFileSync.mockReturnValue("## Tasks\n- [ ] Task A");
-    mockParseTasksFromPlan.mockReturnValue(["Task A"]);
+    mockParseTasksWithAC.mockReturnValue([{ description: "Task A", acceptanceCriteria: [] }]);
     mockDetectCommands.mockResolvedValue(makeDetection());
 
     await replTools.init.execute(
@@ -1011,7 +1020,11 @@ describe("repl_init edge cases", () => {
   it("all tasks start with pending status and zero retries", async () => {
     mockExistsSync.mockReturnValue(true);
     mockReadFileSync.mockReturnValue("## Tasks\n- [ ] A\n- [ ] B\n- [ ] C");
-    mockParseTasksFromPlan.mockReturnValue(["A", "B", "C"]);
+    mockParseTasksWithAC.mockReturnValue([
+      { description: "A", acceptanceCriteria: [] },
+      { description: "B", acceptanceCriteria: [] },
+      { description: "C", acceptanceCriteria: [] },
+    ]);
     mockDetectCommands.mockResolvedValue(makeDetection());
 
     await replTools.init.execute(
@@ -1030,7 +1043,7 @@ describe("repl_init edge cases", () => {
   it("preserves lint command from detection even with build/test overrides", async () => {
     mockExistsSync.mockReturnValue(true);
     mockReadFileSync.mockReturnValue("## Tasks\n- [ ] Task A");
-    mockParseTasksFromPlan.mockReturnValue(["Task A"]);
+    mockParseTasksWithAC.mockReturnValue([{ description: "Task A", acceptanceCriteria: [] }]);
     mockDetectCommands.mockResolvedValue(
       makeDetection({ lintCommand: "npm run lint" }),
     );

@@ -14,7 +14,7 @@ import {
   getSubagentChoices,
 } from "./registry.js";
 
-const VERSION = "3.4.0";
+const VERSION = "4.0.0";
 const PLUGIN_NAME = "cortex-agents";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -500,7 +500,7 @@ async function promptModelSelection(): Promise<{
   });
 
   console.log(
-    "Primary agents (implement, architect, fix, audit) handle complex tasks.\nUse your best available model.\n"
+    "Primary agents (architect, implement, fix) handle complex tasks.\nUse your best available model.\n"
   );
 
   const { primaryModel } = await prompts({
@@ -543,7 +543,7 @@ async function promptModelSelection(): Promise<{
   });
 
   console.log(
-    "Subagents (crosslayer, qa, guard, ship) handle focused tasks.\nA faster/cheaper model works great here.\n"
+    "Subagents (debug, coder, testing, security, devops, audit) handle focused tasks.\nA faster/cheaper model works great here.\n"
   );
 
   const { subagentModel } = await prompts({
@@ -796,20 +796,17 @@ EXAMPLES:
   npx ${PLUGIN_NAME} status                     # Check status
 
 AGENTS:
-  Primary (implement, architect, fix, audit):
+  Primary (architect, implement, fix):
     Handle complex tasks — select your best model.
 
-  Subagents (crosslayer, qa, guard, ship):
+  Subagents (debug, coder, testing, security, devops, audit):
     Handle focused tasks — a fast/cheap model works great.
 
-TOOLS (32):
+TOOLS (29):
   cortex_init, cortex_status      .cortex directory management
   cortex_configure                Per-project model configuration
   worktree_create, worktree_list  Git worktree management
   worktree_remove, worktree_open
-  worktree_launch                 Launch worktree (terminal/PTY/background)
-  detect_environment              Detect IDE/terminal for launch options
-  get_environment_info            Quick environment info for agents
   branch_create, branch_status    Git branch operations
   branch_switch
   plan_save, plan_list            Plan persistence
