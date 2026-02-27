@@ -14,11 +14,13 @@ import * as path from "path";
 import {
   parseTasksWithAC,
   detectCommands,
+  readCortexConfig,
   readReplState,
   writeReplState,
   getNextTask,
   getCurrentTask,
   isLoopComplete,
+  detectIncompleteState,
   formatProgress,
   formatSummary,
   type ReplState,
@@ -53,8 +55,10 @@ export const init = tool({
       .describe("Max retries per failing task before escalating to user (default: 3)"),
   },
   async execute(args, context) {
-    const { planFilename, buildCommand, testCommand, maxRetries = 3 } = args;
     const cwd = context.worktree;
+    const config = readCortexConfig(cwd);
+    const { planFilename, buildCommand, testCommand, maxRetries = config.maxRetries ?? 3 } = args;
+
 
     // 1. Validate plan filename
     if (!planFilename || planFilename === "." || planFilename === "..") {
@@ -154,6 +158,7 @@ export const status = tool({
       const next = getNextTask(state);
       if (next) {
         next.status = "in_progress";
+        next.startedAt = new Date().toISOString();
         state.currentTaskIndex = next.index;
         writeReplState(context.worktree, state);
       }
@@ -231,6 +236,7 @@ function processReport(
   switch (result) {
     case "pass": {
       task.status = "passed";
+      task.completedAt = new Date().toISOString();
       const attempt = task.iterations.length;
       const suffix = attempt === 1 ? "1st" : attempt === 2 ? "2nd" : attempt === 3 ? "3rd" : `${attempt}th`;
       output = `\u2713 Task #${taskNum} PASSED (${suffix} attempt)\n  "${taskDesc}"\n  Detail: ${detail.substring(0, 200)}`;
@@ -244,6 +250,7 @@ function processReport(
       if (task.retries >= state.maxRetries) {
         // Retries exhausted
         task.status = "failed";
+        task.completedAt = new Date().toISOString();
         output = `\u2717 Task #${taskNum} FAILED \u2014 retries exhausted (${attempt}/${state.maxRetries} attempts)\n  "${taskDesc}"\n  Detail: ${detail.substring(0, 200)}\n\n\u2192 ASK THE USER how to proceed. Suggest: fix manually, skip task, or abort loop.`;
       } else {
         // Retries remaining — stay in_progress
@@ -259,6 +266,7 @@ function processReport(
 
     case "skip": {
       task.status = "skipped";
+      task.completedAt = new Date().toISOString();
       output = `\u2298 Task #${taskNum} SKIPPED\n  "${taskDesc}"\n  Reason: ${detail.substring(0, 200)}`;
       break;
     }
@@ -268,6 +276,7 @@ function processReport(
   const next = getNextTask(state);
   if (next) {
     next.status = "in_progress";
+    next.startedAt = new Date().toISOString();
     state.currentTaskIndex = next.index;
     output += `\n\n\u2192 Next: Task #${next.index + 1} "${next.description}"`;
   } else {
@@ -280,6 +289,57 @@ function processReport(
   writeReplState(cwd, state);
   return output;
 }
+
+// ─── repl_resume ─────────────────────────────────────────────────────────────
+
+export const resume = tool({
+  description:
+    "Detect and resume an interrupted REPL loop. Checks for incomplete state " +
+    "in .cortex/repl-state.json and offers to continue from where it left off. " +
+    "Call this at the start of a session to recover from crashes or context loss.",
+  args: {},
+  async execute(args, context) {
+    const state = detectIncompleteState(context.worktree);
+    if (!state) {
+      return `\u2717 No interrupted REPL loop found.\n\nEither no loop has been started, or the previous loop completed normally.`;
+    }
+
+    const total = state.tasks.length;
+    const passed = state.tasks.filter((t) => t.status === "passed").length;
+    const failed = state.tasks.filter((t) => t.status === "failed").length;
+    const skipped = state.tasks.filter((t) => t.status === "skipped").length;
+    const done = passed + failed + skipped;
+    const current = getCurrentTask(state);
+    const next = getNextTask(state);
+
+    const lines: string[] = [];
+    lines.push(`\u2713 Interrupted REPL loop detected`);
+    lines.push("");
+    lines.push(`Plan: ${state.planFilename}`);
+    lines.push(`Progress: ${done}/${total} tasks completed (${passed} passed, ${failed} failed, ${skipped} skipped)`);
+    lines.push(`Started: ${state.startedAt}`);
+
+    if (current) {
+      lines.push("");
+      lines.push(`Interrupted task (#${current.index + 1}):`);
+      lines.push(`  "${current.description}"`);
+      lines.push(`  Status: in_progress (${current.retries} retries so far)`);
+      if (current.iterations.length > 0) {
+        const lastIter = current.iterations[current.iterations.length - 1];
+        lines.push(`  Last attempt: ${lastIter.result} — ${lastIter.detail.substring(0, 100)}`);
+      }
+    } else if (next) {
+      lines.push("");
+      lines.push(`Next pending task (#${next.index + 1}):`);
+      lines.push(`  "${next.description}"`);
+    }
+
+    lines.push("");
+    lines.push(`\u2192 Run repl_status to continue the loop from where it left off.`);
+
+    return lines.join("\n");
+  },
+});
 
 // ─── repl_summary ────────────────────────────────────────────────────────────
 

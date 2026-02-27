@@ -10,6 +10,7 @@ import * as docs from "./tools/docs";
 import * as task from "./tools/task";
 import * as github from "./tools/github";
 import * as repl from "./tools/repl";
+import * as qualityGate from "./tools/quality-gate";
 
 // ─── Agent Descriptions (for handover toasts) ───────────────────────────────
 
@@ -23,6 +24,9 @@ const AGENT_DESCRIPTIONS: Record<string, string> = {
   security: "Security subagent — vulnerability audit",
   devops: "DevOps subagent — CI/CD and deployment",
   audit: "Audit subagent — code quality assessment",
+  refactor: "Refactor subagent — behavior-preserving restructuring",
+  "docs-writer": "Docs subagent — documentation generation",
+  perf: "Perf subagent — performance analysis",
 };
 
 // ─── Tool Notification Config ────────────────────────────────────────────────
@@ -141,6 +145,16 @@ const TOOL_NOTIFICATIONS: Record<string, ToolNotificationConfig> = {
     errorTitle: "Report Failed",
     errorMsg: (_, out) => out.substring(0, 100),
   },
+  quality_gate_summary: {
+    successTitle: "Quality Gate",
+    successMsg: (_args: any, output: string) => {
+      const recMatch = output.match(/\*\*Recommendation:\s*(GO|NO-GO|GO-WITH-WARNINGS)\*\*/);
+      return recMatch ? `Recommendation: ${recMatch[1]}` : "Summary generated";
+    },
+    errorTitle: "Quality Gate Failed",
+    errorMsg: (_, out) => out.substring(0, 100),
+    successDuration: 5000,
+  },
 };
 
 // ─── Error Message Extraction ────────────────────────────────────────────────
@@ -224,7 +238,11 @@ export const CortexPlugin: Plugin = async (ctx) => {
       repl_init: repl.init,
       repl_status: repl.status,
       repl_report: repl.report,
+      repl_resume: repl.resume,
       repl_summary: repl.summary,
+
+      // Quality gate aggregation tool
+      quality_gate_summary: qualityGate.qualityGateSummary,
     },
 
     // ── Post-execution toast notifications ────────────────────────────────

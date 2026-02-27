@@ -28,11 +28,11 @@ describe("Agent Constants", () => {
 
   describe("SUBAGENTS", () => {
     it("contains the correct subagent names", () => {
-      expect(SUBAGENTS).toEqual(["debug", "coder", "testing", "security", "devops", "audit"]);
+      expect(SUBAGENTS).toEqual(["debug", "coder", "testing", "security", "devops", "audit", "refactor", "docs-writer", "perf"]);
     });
 
-    it("has 6 subagents", () => {
-      expect(SUBAGENTS).toHaveLength(6);
+    it("has 9 subagents", () => {
+      expect(SUBAGENTS).toHaveLength(9);
     });
 
     it("is a readonly tuple", () => {
@@ -52,11 +52,14 @@ describe("Agent Constants", () => {
         "security",
         "devops",
         "audit",
+        "refactor",
+        "docs-writer",
+        "perf",
       ]);
     });
 
-    it("has 9 total agents", () => {
-      expect(ALL_AGENTS).toHaveLength(9);
+    it("has 12 total agents", () => {
+      expect(ALL_AGENTS).toHaveLength(12);
     });
 
     it("includes all primary agents", () => {

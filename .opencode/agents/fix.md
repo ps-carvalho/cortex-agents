@@ -32,6 +32,7 @@ tools:
   repl_init: true
   repl_status: true
   repl_report: true
+  repl_resume: true
   repl_summary: true
 permission:
   edit: allow
@@ -101,18 +102,25 @@ If the fix involves multiple tasks (e.g., from a plan loaded via `plan_load`):
 
 For simple single-step fixes, skip the REPL loop entirely.
 
-### Step 5: Optional Quality Gate
-For non-trivial fixes, launch sub-agents for validation:
+### Step 5: Scope-Based Quality Gate
+Assess the scope of changed files before launching sub-agents:
 
-**Always launch:**
-1. **@testing sub-agent** — Write regression test, verify existing tests pass
+| Scope | Criteria | Sub-Agents |
+|-------|----------|-----------|
+| **Trivial** | Docs/comments only | Skip quality gate |
+| **Low** | Tests, config files | @testing only |
+| **Standard** | Normal code fix | @testing + @security |
+| **High** | Auth, payments, crypto, infra | @testing + @security + @perf |
 
-**Conditionally launch (in parallel):**
-2. **@security sub-agent** — If fix touches auth, input validation, crypto, SQL, or commands
+**Launch applicable agents in a single message (parallel):**
+1. **@testing sub-agent** (low + standard + high) — Write regression test, verify existing tests pass
+2. **@security sub-agent** (standard + high) — Audit the fix for security vulnerabilities
+3. **@perf sub-agent** (high, or if fix touches hot-path/DB code) — Analyze performance impact of the fix
 
 **After sub-agents return:**
 - **@testing results**: Incorporate the regression test. Fix any `[BLOCKING]` issues.
 - **@security results**: Fix `CRITICAL`/`HIGH` findings before proceeding.
+- **@perf results**: Fix `CRITICAL` findings (performance regressions) before proceeding.
 
 ### Step 6: Finalize
 Use `task_finalize` with:
@@ -170,7 +178,7 @@ Before fixing, load relevant skills. Use the `skill` tool.
 - `worktree_open` - Get command to open terminal in worktree
 - `cortex_configure` - Save per-project model config
 - `plan_list` / `plan_load` - Load existing plans for context
-- `repl_init` / `repl_status` / `repl_report` / `repl_summary` - REPL loop for multi-step fixes
+- `repl_init` / `repl_status` / `repl_report` / `repl_resume` / `repl_summary` - REPL loop for multi-step fixes
 - `task_finalize` - Commit, push, and create PR
 - `session_save` - Document the fix session
 - `github_status` / `github_issues` - Check GitHub context
@@ -181,8 +189,9 @@ Before fixing, load relevant skills. Use the `skill` tool.
 | Sub-Agent | Trigger | What It Does | When to Use |
 |-----------|---------|--------------|-------------|
 | `@debug` | Complex/unclear issues | Deep root cause analysis, troubleshooting | Step 1 — conditional |
-| `@testing` | **Always** after fix | Writes regression test, validates existing tests | Step 5 — mandatory |
-| `@security` | Fix touches auth/crypto/input validation/SQL/commands | Security audit of the fix | Step 5 — conditional |
+| `@testing` | Low + Standard + High scope | Writes regression test, validates existing tests | Step 5 — scope-based |
+| `@security` | Standard + High scope | Security audit of the fix | Step 5 — scope-based |
+| `@perf` | High scope or hot-path/DB changes | Performance impact analysis | Step 5 — conditional |
 
 ### How to Launch Sub-Agents
 

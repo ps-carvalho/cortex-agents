@@ -43,6 +43,10 @@ export interface ReplTask {
   retries: number;
   /** Full iteration history */
   iterations: TaskIteration[];
+  /** ISO timestamp when the task was started */
+  startedAt?: string;
+  /** ISO timestamp when the task was completed/failed/skipped */
+  completedAt?: string;
 }
 
 export interface ReplState {
@@ -64,6 +68,11 @@ export interface ReplState {
   currentTaskIndex: number;
   /** All tasks in the loop */
   tasks: ReplTask[];
+}
+
+export interface CortexConfig {
+  /** Max retries per task before escalating to user */
+  maxRetries?: number;
 }
 
 export interface CommandDetection {
@@ -303,6 +312,29 @@ export async function detectCommands(cwd: string): Promise<CommandDetection> {
   return result;
 }
 
+// ─── Config Reading ─────────────────────────────────────────────────────────
+
+const CONFIG_FILE = "config.json";
+
+/**
+ * Read cortex config from .cortex/config.json.
+ * Returns an empty config if the file doesn't exist or is malformed.
+ */
+export function readCortexConfig(cwd: string): CortexConfig {
+  const configPath = path.join(cwd, CORTEX_DIR, CONFIG_FILE);
+  if (!fs.existsSync(configPath)) return {};
+
+  try {
+    const raw = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+    if (typeof raw !== "object" || raw === null) return {};
+    return {
+      maxRetries: typeof raw.maxRetries === "number" ? raw.maxRetries : undefined,
+    };
+  } catch {
+    return {};
+  }
+}
+
 // ─── State Management ────────────────────────────────────────────────────────
 
 /**
@@ -405,6 +437,44 @@ export function isLoopComplete(state: ReplState): boolean {
 
 // ─── Formatting ──────────────────────────────────────────────────────────────
 
+/**
+ * Detect if a previous REPL loop was interrupted mid-task.
+ * Returns the incomplete state if found, null otherwise.
+ */
+export function detectIncompleteState(cwd: string): ReplState | null {
+  const state = readReplState(cwd);
+  if (!state) return null;
+
+  // Loop is already complete
+  if (isLoopComplete(state)) return null;
+
+  // There's an in_progress task — session was interrupted
+  const current = getCurrentTask(state);
+  if (current) return state;
+
+  // There are pending tasks but no in_progress — also incomplete
+  const next = getNextTask(state);
+  if (next) return state;
+
+  return null;
+}
+
+/**
+ * Format task duration as a human-readable string.
+ */
+function formatTaskDuration(task: ReplTask): string | null {
+  if (!task.startedAt) return null;
+  const start = new Date(task.startedAt);
+  const end = task.completedAt ? new Date(task.completedAt) : new Date();
+  const durationMs = end.getTime() - start.getTime();
+
+  if (durationMs < 1000) return "< 1s";
+  if (durationMs < 60_000) return `${Math.round(durationMs / 1000)}s`;
+  const mins = Math.floor(durationMs / 60_000);
+  const secs = Math.round((durationMs % 60_000) / 1000);
+  return secs > 0 ? `${mins}m ${secs}s` : `${mins}m`;
+}
+
 /** Visual progress bar using block characters. */
 function progressBar(done: number, total: number, width: number = 20): string {
   if (total === 0) return "░".repeat(width);
@@ -480,18 +550,21 @@ export function formatProgress(state: ReplState): string {
       ? ` (${task.iterations.length} iteration${task.iterations.length > 1 ? "s" : ""}${task.retries > 0 ? `, ${task.retries} retr${task.retries > 1 ? "ies" : "y"}` : ""})`
       : "";
 
+    const timeInfo = formatTaskDuration(task);
+    const timeSuffix = timeInfo ? ` [${timeInfo}]` : "";
+
     switch (task.status) {
       case "passed":
-        lines.push(`  \u2713 ${num} ${task.description}${iterInfo}`);
+        lines.push(`  \u2713 ${num} ${task.description}${iterInfo}${timeSuffix}`);
         break;
       case "failed":
-        lines.push(`  \u2717 ${num} ${task.description}${iterInfo}`);
+        lines.push(`  \u2717 ${num} ${task.description}${iterInfo}${timeSuffix}`);
         break;
       case "skipped":
-        lines.push(`  \u2298 ${num} ${task.description}`);
+        lines.push(`  \u2298 ${num} ${task.description}${timeSuffix}`);
         break;
       case "in_progress":
-        lines.push(`  \u25B6 ${num} ${task.description}${iterInfo}`);
+        lines.push(`  \u25B6 ${num} ${task.description}${iterInfo}${timeSuffix}`);
         break;
       case "pending":
         lines.push(`  \u25CB ${num} ${task.description}`);

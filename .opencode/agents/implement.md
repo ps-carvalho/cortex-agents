@@ -33,7 +33,9 @@ tools:
   repl_init: true
   repl_status: true
   repl_report: true
+  repl_resume: true
   repl_summary: true
+  quality_gate_summary: true
 permission:
   edit: allow
   bash:
@@ -124,6 +126,8 @@ Options:
 
 Implement plan tasks iteratively using the REPL loop. Each task goes through a **Read → Eval → Print → Loop** cycle with per-task build+test verification.
 
+**Session recovery:** Run `repl_resume` first to check for an interrupted loop from a previous session. If found, it will show progress and the interrupted task — skip to 6b to continue.
+
 **If no plan was loaded in Step 3**, fall back to implementing changes directly (skip to 6c without the loop tools) and proceed to Step 7 when done.
 
 **Multi-layer feature detection:** If the task involves changes across 3+ layers (e.g., database + API + frontend, or CLI + library + tests), launch the **@coder sub-agent** via the Task tool to implement the end-to-end feature.
@@ -166,56 +170,101 @@ Based on the repl_report response:
 - **If build fails 3 times in a row on DIFFERENT tasks**, pause and ask user (likely a systemic issue)
 - **Always run build before tests** — don't waste time testing broken code
 
-### Step 7: Quality Gate — Parallel Sub-Agent Review (MANDATORY)
+### Step 7: Quality Gate — Two-Phase Sub-Agent Review (MANDATORY)
 
 **7a: Generate REPL Summary** (if loop was used)
 Run `repl_summary` to get the loop results. Include this summary in the quality gate section of the PR body.
 If any tasks are marked "failed", list them explicitly in the PR body and consider whether they block the quality gate.
 
-**7b: Launch sub-agents**
+**7b: Assess Change Scope**
+Before launching sub-agents, assess the scope of changes to avoid wasting tokens on trivial changes. Classify the changed files into one of four tiers:
+
+| Scope | Criteria | Sub-Agents to Launch |
+|-------|----------|---------------------|
+| **Trivial** | Docs-only, comments, formatting, `.md` files | @docs-writer only (or skip entirely) |
+| **Low** | Tests, config files, `.gitignore`, linter config | @testing only |
+| **Standard** | Normal code changes | @testing + @security + @audit + @docs-writer |
+| **High** | Auth, payments, crypto, infra, DB migrations | All: @testing + @security + @audit + @devops + @perf + @docs-writer |
+
+Use these signals to classify:
+- **Trivial**: All changed files match `*.md`, `*.txt`, `LICENSE`, `CHANGELOG`, `.editorconfig`, `.vscode/`
+- **Low**: All changed files match `*.test.*`, `*.spec.*`, `__tests__/`, `tsconfig*`, `vitest.config*`, `.eslintrc*`, `.gitignore`
+- **High**: Any file matches `auth`, `login`, `password`, `token`, `crypto`, `payment`, `billing`, `Dockerfile`, `.github/workflows/`, `terraform/`, `k8s/`, `deploy/`, `infra/`
+- **Standard**: Everything else
+
+**If scope is trivial**, skip the quality gate entirely and proceed to Step 8.
+
+**7c: Phase 1 — Parallel sub-agent launch**
 After completing implementation and BEFORE documentation or finalization, launch sub-agents for automated quality checks. **Use the Task tool to launch multiple sub-agents in a SINGLE message for parallel execution.**
 
-**Always launch (both in the same message):**
+**Based on scope, launch these agents:**
 
-1. **@testing sub-agent** — Provide:
+1. **@testing sub-agent** (standard + high) — Provide:
    - List of files you created or modified
    - Summary of what was implemented
    - The test framework used in the project (check `package.json` or existing tests)
    - Ask it to: write unit tests for new code, verify existing tests still pass, report coverage gaps
 
-2. **@security sub-agent** — Provide:
+2. **@security sub-agent** (standard + high) — Provide:
    - List of files you created or modified
    - Summary of what was implemented
    - Ask it to: audit for OWASP Top 10 vulnerabilities, check for secrets/credentials in code, review input validation, report findings with severity levels
 
-**Conditionally launch (in the same parallel batch if applicable):**
+3. **@audit sub-agent** (standard + high) — Provide:
+   - List of files you created or modified
+   - Summary of what was implemented
+   - Ask it to: assess code quality, identify tech debt, review patterns, report findings
 
-3. **@devops sub-agent** — ONLY if you modified any of these file patterns:
-   - `Dockerfile*`, `docker-compose*`, `.dockerignore`
-   - `.github/workflows/*`, `.gitlab-ci*`, `Jenkinsfile`
-   - `*.yml`/`*.yaml` in project root that look like CI config
-   - Files in `deploy/`, `infra/`, `k8s/`, `terraform/` directories
+4. **@docs-writer sub-agent** (standard + high) — Provide:
+   - List of files you created or modified
+   - Summary of what was implemented
+   - The plan content (if available)
+   - Ask it to: generate appropriate documentation (decision/feature/flow docs), save via docs_save
+
+5. **@devops sub-agent** (high scope, or if infra files changed) — Provide:
+   - The infrastructure/CI files that were modified
    - Ask it to: validate config syntax, check best practices, review security of CI/CD pipeline
 
-**After all sub-agents return, review their results:**
+6. **@perf sub-agent** (high scope, or if hot-path/DB/render code changed) — Provide:
+   - List of performance-sensitive files modified
+   - Summary of algorithmic changes
+   - Ask it to: analyze complexity, detect N+1 queries, check for rendering issues, report findings
+
+**7d: Phase 2 — Cross-agent context sharing**
+After Phase 1 sub-agents return, feed their findings back for cross-agent reactions:
+
+- If **@security** reported `CRITICAL` or `HIGH` findings, launch **@testing** again with:
+  - The security findings as context
+  - Ask it to: write regression tests specifically for the security vulnerabilities found
+- If **@security** findings affect **@audit**'s quality score, note this in the quality gate summary
+
+**7e: Review Phase 1 + Phase 2 results:**
 
 - **@testing results**: If any `[BLOCKING]` issues exist (tests revealing bugs), fix the implementation before proceeding. `[WARNING]` issues should be addressed if feasible.
 - **@security results**: If `CRITICAL` or `HIGH` findings exist, fix them before proceeding. `MEDIUM` findings should be noted in the PR body. `LOW` findings can be deferred.
+- **@audit results**: If `CRITICAL` findings exist, address them. `SUGGESTION` and `NITPICK` do not block.
+- **@docs-writer results**: Review generated documentation for accuracy. Fix any issues.
 - **@devops results**: If `ERROR` findings exist, fix them before proceeding.
+- **@perf results**: If `CRITICAL` findings exist (performance regressions), fix before proceeding. `WARNING` findings noted in PR body.
 
 **Include a quality gate summary in the PR body** when finalizing (Step 10):
 ```
 ## Quality Gate
 - Testing: [PASS/FAIL] — [N] tests written, [N] passing
 - Security: [PASS/PASS WITH WARNINGS/FAIL] — [N] findings
+- Audit: [PASS/score] — [N] findings
+- Docs: [N] documents created
 - DevOps: [PASS/N/A] — [N] issues (if applicable)
+- Performance: [PASS/N/A] — [N] issues (if applicable)
 ```
 
 Proceed to Step 8 only when the quality gate passes.
 
-### Step 8: Documentation Prompt (MANDATORY)
+### Step 8: Documentation Review (MANDATORY)
 
-After completing work and BEFORE finalizing, use the question tool to ask:
+If the **@docs-writer** sub-agent ran in Step 7, review its output. The documentation has already been generated and saved.
+
+If @docs-writer was NOT launched (trivial/low scope changes), use the question tool to ask:
 
 "Would you like to update project documentation?"
 
@@ -343,7 +392,9 @@ Load **multiple skills** if the task spans domains (e.g., fullstack feature → 
 - `repl_init` - Initialize REPL loop from a plan (parses tasks, detects build/test commands)
 - `repl_status` - Get loop progress, current task, and build/test commands
 - `repl_report` - Report task outcome (pass/fail/skip) and advance the loop
+- `repl_resume` - Detect and resume an interrupted REPL loop from a previous session
 - `repl_summary` - Generate markdown results table for PR body inclusion
+- `quality_gate_summary` - Aggregate sub-agent findings into unified report with go/no-go recommendation
 - `skill` - Load relevant skills for complex tasks
 
 ## Sub-Agent Orchestration
@@ -352,11 +403,14 @@ The following sub-agents are available via the Task tool. **Launch multiple sub-
 
 | Sub-Agent | Trigger | What It Does | When to Use |
 |-----------|---------|--------------|-------------|
-| `@testing` | **Always** after implementation | Writes tests, runs test suite, reports coverage gaps | Step 7 — mandatory |
-| `@security` | **Always** after implementation | OWASP audit, secrets scan, severity-rated findings | Step 7 — mandatory |
-| `@audit` | **Always** after implementation | Code quality, tech debt, pattern review | Step 7 — mandatory |
+| `@testing` | Standard + High scope changes | Writes tests, runs test suite, reports coverage gaps | Step 7 — scope-based |
+| `@security` | Standard + High scope changes | OWASP audit, secrets scan, severity-rated findings | Step 7 — scope-based |
+| `@audit` | Standard + High scope changes | Code quality, tech debt, pattern review | Step 7 — scope-based |
+| `@docs-writer` | Standard + High scope changes | Auto-generates decision/feature/flow docs | Step 7 — scope-based |
+| `@perf` | High scope or hot-path/DB/render changes | Complexity analysis, N+1 detection, bundle impact | Step 7 — conditional |
 | `@coder` | Multi-layer features (3+ layers) | End-to-end implementation across frontend/backend/database | Step 6 — conditional |
-| `@devops` | CI/CD/Docker/infra files changed | Config validation, best practices checklist | Step 7 — conditional |
+| `@devops` | High scope or CI/CD/Docker/infra files changed | Config validation, best practices checklist | Step 7 — conditional |
+| `@refactor` | Plan type is `refactor` | Behavior-preserving restructuring with test verification | Step 6 — conditional |
 | `@debug` | Issues found during implementation | Root cause analysis, troubleshooting | Step 6 — conditional |
 
 ### How to Launch Sub-Agents
@@ -364,9 +418,16 @@ The following sub-agents are available via the Task tool. **Launch multiple sub-
 Use the **Task tool** with `subagent_type` set to the agent name. Example for the mandatory quality gate:
 
 ```
-# In a single message, launch both:
+# In a single message, launch all applicable agents in parallel:
 Task(subagent_type="testing", prompt="Files changed: [list]. Summary: [what was done]. Test framework: vitest. Write tests and report results.")
 Task(subagent_type="security", prompt="Files changed: [list]. Summary: [what was done]. Audit for vulnerabilities and report findings.")
+Task(subagent_type="audit", prompt="Files changed: [list]. Summary: [what was done]. Assess code quality and report findings.")
+Task(subagent_type="docs-writer", prompt="Files changed: [list]. Summary: [what was done]. Plan: [plan content]. Generate documentation.")
+
+# Conditional — add to the same parallel batch:
+Task(subagent_type="perf", prompt="Files changed: [list]. Summary: [algorithmic changes]. Analyze performance and report findings.")
+Task(subagent_type="devops", prompt="Infra files changed: [list]. Validate configs and report findings.")
+Task(subagent_type="refactor", prompt="Files to refactor: [list]. Goal: [refactoring objective]. Build: [cmd]. Test: [cmd].")
 ```
 
-Both will execute in parallel and return their structured reports.
+All will execute in parallel and return their structured reports.

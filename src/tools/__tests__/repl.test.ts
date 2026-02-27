@@ -48,11 +48,13 @@ vi.mock("../../utils/repl.js", () => ({
   parseTasksFromPlan: vi.fn(),
   parseTasksWithAC: vi.fn(),
   detectCommands: vi.fn(),
+  readCortexConfig: vi.fn().mockReturnValue({}),
   readReplState: vi.fn(),
   writeReplState: vi.fn(),
   getNextTask: vi.fn(),
   getCurrentTask: vi.fn(),
   isLoopComplete: vi.fn(),
+  detectIncompleteState: vi.fn(),
   formatProgress: vi.fn(),
   formatSummary: vi.fn(),
 }));
@@ -63,11 +65,13 @@ const {
   parseTasksFromPlan,
   parseTasksWithAC,
   detectCommands,
+  readCortexConfig,
   readReplState,
   writeReplState,
   getNextTask,
   getCurrentTask,
   isLoopComplete,
+  detectIncompleteState,
   formatProgress,
   formatSummary,
 } = await import("../../utils/repl.js");
@@ -153,15 +157,16 @@ describe("repl tools module exports", () => {
     expect(typeof replTools.summary).toBe("object");
   });
 
-  it("should export exactly four named tools", () => {
+  it("should export exactly five named tools", () => {
     const exportedKeys = Object.keys(replTools).filter(
       (k) => !k.startsWith("__"),
     );
     expect(exportedKeys).toContain("init");
     expect(exportedKeys).toContain("status");
     expect(exportedKeys).toContain("report");
+    expect(exportedKeys).toContain("resume");
     expect(exportedKeys).toContain("summary");
-    expect(exportedKeys).toHaveLength(4);
+    expect(exportedKeys).toHaveLength(5);
   });
 });
 
