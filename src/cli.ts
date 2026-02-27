@@ -14,11 +14,14 @@ import {
   getSubagentChoices,
 } from "./registry.js";
 
-const VERSION = "4.0.0";
 const PLUGIN_NAME = "cortex-agents";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+const VERSION = JSON.parse(
+  fs.readFileSync(path.resolve(__dirname, "..", "package.json"), "utf-8"),
+).version as string;
 
 // The .opencode directory shipped with the package (adjacent to dist/)
 const PACKAGE_OPENCODE_DIR = path.resolve(__dirname, "..", ".opencode");
