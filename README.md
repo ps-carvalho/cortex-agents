@@ -276,18 +276,7 @@ npx cortex-agents configure --project  # Per-project (saves to .opencode/models.
 
 Agents can also configure models mid-session via `cortex_configure` — no need to leave OpenCode.
 
-### Supported Providers
-
-| Provider | Premium | Standard | Fast |
-|----------|---------|----------|------|
-| **Anthropic** | Claude Opus 4 | Claude Sonnet 4 | Claude 3.5 Haiku |
-| **OpenAI** | o3 | GPT-4.1 | o4 Mini |
-| **Google** | Gemini 2.5 Pro | — | Gemini 2.5 Flash |
-| **xAI** | Grok 3 | — | Grok 3 Mini |
-| **DeepSeek** | DeepSeek R1 | — | DeepSeek Chat |
-| **Kimi** | — | Kimi K2P5 | — |
-
-> Don't see your provider? Select **"Enter custom model ID"** and type any `provider/model` string.
+> Don't see your provider in the picker? Select **"Enter custom model ID"** and type any `provider/model` string.
 
 ---
 
