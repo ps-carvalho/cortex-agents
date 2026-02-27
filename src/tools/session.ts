@@ -2,9 +2,41 @@ import { tool } from "@opencode-ai/plugin";
 import * as fs from "fs";
 import * as path from "path";
 import { git } from "../utils/shell.js";
+import { readCortexConfig } from "../utils/repl.js";
 
 const CORTEX_DIR = ".cortex";
 const SESSIONS_DIR = "sessions";
+
+/**
+ * Delete session files older than the configured retention period.
+ */
+function cleanExpiredSessions(worktree: string): number {
+  const config = readCortexConfig(worktree);
+  const retentionDays = config.sessionRetentionDays;
+  if (!retentionDays || retentionDays <= 0) return 0;
+
+  const sessionsPath = path.join(worktree, CORTEX_DIR, SESSIONS_DIR);
+  if (!fs.existsSync(sessionsPath)) return 0;
+
+  const cutoff = Date.now() - retentionDays * 24 * 60 * 60 * 1000;
+  let deleted = 0;
+
+  for (const file of fs.readdirSync(sessionsPath)) {
+    if (!file.endsWith(".md")) continue;
+    // Session filenames start with YYYY-MM-DD — parse the date prefix
+    const dateStr = file.substring(0, 10);
+    const fileDate = new Date(dateStr);
+    if (!isNaN(fileDate.getTime()) && fileDate.getTime() < cutoff) {
+      try {
+        fs.unlinkSync(path.join(sessionsPath, file));
+        deleted++;
+      } catch {
+        // Ignore deletion errors
+      }
+    }
+  }
+  return deleted;
+}
 
 function getDatePrefix(): string {
   const now = new Date();
@@ -104,12 +136,16 @@ See: \`.cortex/plans/${relatedPlan}\`
     // Write file
     fs.writeFileSync(filepath, content);
 
+    // Clean up expired sessions based on retention config
+    const cleaned = cleanExpiredSessions(context.worktree);
+    const cleanedMsg = cleaned > 0 ? `\nCleaned up ${cleaned} expired session(s).` : "";
+
     return `✓ Session summary saved
 
 File: ${filename}
 Branch: ${currentBranch}
 Decisions recorded: ${decisions.length}
-${filesChanged ? `Files tracked: ${filesChanged.length}` : ""}
+${filesChanged ? `Files tracked: ${filesChanged.length}` : ""}${cleanedMsg}
 
 Session summaries are stored in .cortex/sessions/ and gitignored by default.`;
   },

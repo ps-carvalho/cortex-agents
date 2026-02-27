@@ -60,13 +60,14 @@ const LOW_RISK_PATTERNS = [
 
 /** Patterns that indicate high-risk changes — auth, payments, infra, security */
 const HIGH_RISK_PATTERNS = [
-  // Auth & security
-  /auth/i,
+  // Auth & security — match directory boundaries, not arbitrary substrings
+  /\bauth[/\-._]/i,
+  /\/auth\b/i,
   /login/i,
-  /session/i,
+  /\/session\b/i,
   /password/i,
-  /token/i,
-  /crypto/i,
+  /\/tokens?\b/i,
+  /\bcrypto[/\-._]/i,
   /encrypt/i,
   /permission/i,
   /rbac/i,
@@ -78,7 +79,7 @@ const HIGH_RISK_PATTERNS = [
   /payment/i,
   /billing/i,
   /stripe/i,
-  /checkout/i,
+  /\/checkout\b/i,
 
   // Infrastructure & deployment
   /Dockerfile/i,
@@ -123,21 +124,15 @@ const DEVOPS_PATTERNS = [
 
 /** Patterns that indicate performance-sensitive changes */
 const PERF_PATTERNS = [
-  /query/i,
+  /\/queries?\b/i,
   /database/i,
   /migration/i,
   /\.sql$/i,
   /prisma/i,
   /drizzle/i,
   /repository/i,
-  /cache/i,
-  /render/i,
-  /component/i,
-  /hook/i,
+  /\/cache[/\-._]/i,
   /algorithm/i,
-  /sort/i,
-  /search/i,
-  /index/i,
   /worker/i,
   /stream/i,
   /batch/i,

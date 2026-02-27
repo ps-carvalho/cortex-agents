@@ -11,6 +11,7 @@ import {
 import { git, gh } from "../utils/shell.js";
 import { checkGhAvailability } from "../utils/github.js";
 
+const CORTEX_DIR = ".cortex";
 const PROTECTED_BRANCHES = ["main", "master", "develop", "production", "staging"];
 const DOCS_DIR = "docs";
 
@@ -195,9 +196,24 @@ Create a feature/bugfix branch first with branch_create or worktree_create.`;
       output.push(`Documentation: ${docsCheck.count} doc(s) found`);
     }
 
-    // ── 6. Stage all changes ──────────────────────────────────
+    // ── 6. Stage changes safely ─────────────────────────────
     try {
-      await git(cwd, "add", "-A");
+      // Stage tracked file changes (safe — won't pick up new untracked files)
+      await git(cwd, "add", "-u");
+      // Stage .cortex/ directory explicitly (plans, state, etc.)
+      const cortexPath = path.join(cwd, CORTEX_DIR);
+      if (fs.existsSync(cortexPath)) {
+        await git(cwd, "add", CORTEX_DIR);
+      }
+
+      // Warn about untracked files that won't be staged
+      const { stdout: untrackedOut } = await git(cwd, "ls-files", "--others", "--exclude-standard");
+      const untrackedFiles = untrackedOut.trim().split("\n").filter(Boolean);
+      if (untrackedFiles.length > 0) {
+        warnings.push(
+          `${untrackedFiles.length} untracked file(s) not staged: ${untrackedFiles.slice(0, 5).join(", ")}${untrackedFiles.length > 5 ? ` (and ${untrackedFiles.length - 5} more)` : ""}. Stage them manually with \`git add <file>\` if needed.`
+        );
+      }
     } catch (error: any) {
       return `✗ Error staging changes: ${error.message || error}`;
     }

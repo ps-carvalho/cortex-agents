@@ -102,6 +102,7 @@ export const init = tool({
     }));
 
     const state: ReplState = {
+      version: 1,
       planFilename,
       startedAt: new Date().toISOString(),
       buildCommand: finalBuild,

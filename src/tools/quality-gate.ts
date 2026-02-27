@@ -8,6 +8,7 @@
 import { tool } from "@opencode-ai/plugin";
 import * as fs from "fs";
 import * as path from "path";
+import { classifyChangeScope } from "../utils/change-scope.js";
 
 const CORTEX_DIR = ".cortex";
 const QUALITY_GATE_FILE = "quality-gate.json";
@@ -58,7 +59,11 @@ export const qualityGateSummary = tool({
     scope: tool.schema
       .string()
       .optional()
-      .describe("Change scope classification: trivial, low, standard, high"),
+      .describe("Change scope classification: trivial, low, standard, high. If changedFiles is provided, this is auto-classified and this field is ignored."),
+    changedFiles: tool.schema
+      .array(tool.schema.string())
+      .optional()
+      .describe("Array of changed file paths. When provided, scope is auto-classified using classifyChangeScope."),
     testing: tool.schema
       .string()
       .optional()
@@ -87,6 +92,13 @@ export const qualityGateSummary = tool({
   async execute(args, context) {
     const cwd = context.worktree;
     const reports: AgentReport[] = [];
+
+    // Auto-classify scope from changed files if provided
+    let resolvedScope = args.scope ?? "unknown";
+    if (args.changedFiles && args.changedFiles.length > 0) {
+      const classification = classifyChangeScope(args.changedFiles);
+      resolvedScope = classification.scope;
+    }
 
     // Parse each provided report
     const agentEntries: [string, string | undefined][] = [
@@ -128,7 +140,7 @@ export const qualityGateSummary = tool({
     // Build state for persistence
     const state: QualityGateState = {
       timestamp: new Date().toISOString(),
-      scope: args.scope ?? "unknown",
+      scope: resolvedScope,
       reports,
       recommendation,
     };
@@ -141,7 +153,7 @@ export const qualityGateSummary = tool({
     lines.push(`\u2713 Quality Gate Summary`);
     lines.push("");
     lines.push(`**Recommendation: ${recommendation}**`);
-    lines.push(`Scope: ${args.scope ?? "unknown"}`);
+    lines.push(`Scope: ${resolvedScope}`);
     lines.push(`Agents: ${reports.map((r) => r.agent).join(", ")}`);
     lines.push(`Total findings: ${allFindings.length}`);
     lines.push("");

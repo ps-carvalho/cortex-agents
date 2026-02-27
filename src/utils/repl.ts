@@ -16,6 +16,7 @@ import * as path from "path";
 
 const CORTEX_DIR = ".cortex";
 const REPL_STATE_FILE = "repl-state.json";
+const REPL_STATE_VERSION = 1;
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -50,6 +51,8 @@ export interface ReplTask {
 }
 
 export interface ReplState {
+  /** Schema version for migration support */
+  version: number;
   /** Source plan filename */
   planFilename: string;
   /** ISO timestamp when the loop started */
@@ -73,6 +76,8 @@ export interface ReplState {
 export interface CortexConfig {
   /** Max retries per task before escalating to user */
   maxRetries?: number;
+  /** Session retention in days */
+  sessionRetentionDays?: number;
 }
 
 export interface CommandDetection {
@@ -175,6 +180,26 @@ function extractTasksSection(content: string): string | null {
 // ─── Command Auto-Detection ──────────────────────────────────────────────────
 
 /**
+ * Detect the package manager from lockfiles.
+ * Priority: bun > pnpm > yarn > npm (fallback)
+ */
+export function detectPackageManager(cwd: string): "bun" | "pnpm" | "yarn" | "npm" {
+  if (
+    fs.existsSync(path.join(cwd, "bun.lockb")) ||
+    fs.existsSync(path.join(cwd, "bun.lock"))
+  ) {
+    return "bun";
+  }
+  if (fs.existsSync(path.join(cwd, "pnpm-lock.yaml"))) {
+    return "pnpm";
+  }
+  if (fs.existsSync(path.join(cwd, "yarn.lock"))) {
+    return "yarn";
+  }
+  return "npm";
+}
+
+/**
  * Auto-detect build, test, and lint commands from project configuration files.
  *
  * Detection priority:
@@ -203,29 +228,32 @@ export async function detectCommands(cwd: string): Promise<CommandDetection> {
       const devDeps = pkg.devDependencies || {};
       const deps = pkg.dependencies || {};
 
+      // Detect package manager from lockfiles
+      const pm = detectPackageManager(cwd);
+
       // Build command
       if (scripts.build) {
-        result.buildCommand = "npm run build";
+        result.buildCommand = pm === "yarn" ? "yarn build" : `${pm} run build`;
       }
 
       // Test command — prefer specific runner detection
       if (devDeps.vitest || deps.vitest) {
-        result.testCommand = "npx vitest run";
+        result.testCommand = pm === "bun" ? "bun vitest run" : "npx vitest run";
         result.framework = "vitest";
       } else if (devDeps.jest || deps.jest) {
-        result.testCommand = "npx jest";
+        result.testCommand = pm === "bun" ? "bun jest" : "npx jest";
         result.framework = "jest";
       } else if (devDeps.mocha || deps.mocha) {
-        result.testCommand = "npx mocha";
+        result.testCommand = pm === "bun" ? "bun mocha" : "npx mocha";
         result.framework = "mocha";
       } else if (scripts.test && scripts.test !== 'echo "Error: no test specified" && exit 1') {
-        result.testCommand = "npm test";
+        result.testCommand = pm === "yarn" ? "yarn test" : `${pm} test`;
         result.framework = "npm-test";
       }
 
       // Lint command
       if (scripts.lint) {
-        result.lintCommand = "npm run lint";
+        result.lintCommand = pm === "yarn" ? "yarn lint" : `${pm} run lint`;
       }
 
       result.detected = !!(result.buildCommand || result.testCommand);
@@ -327,8 +355,10 @@ export function readCortexConfig(cwd: string): CortexConfig {
   try {
     const raw = JSON.parse(fs.readFileSync(configPath, "utf-8"));
     if (typeof raw !== "object" || raw === null) return {};
+    const sessions = typeof raw.sessions === "object" && raw.sessions !== null ? raw.sessions : {};
     return {
       maxRetries: typeof raw.maxRetries === "number" ? raw.maxRetries : undefined,
+      sessionRetentionDays: typeof sessions.retention === "number" ? sessions.retention : undefined,
     };
   } catch {
     return {};
@@ -365,6 +395,16 @@ export function readReplState(cwd: string): ReplState | null {
       typeof raw.currentTaskIndex !== "number" ||
       !Array.isArray(raw.tasks)
     ) {
+      return null;
+    }
+
+    // Migrate from v0 (no version field) to v1
+    if (typeof raw.version !== "number") {
+      raw.version = REPL_STATE_VERSION;
+    }
+
+    // Reject state from a newer version we don't understand
+    if (raw.version > REPL_STATE_VERSION) {
       return null;
     }
 

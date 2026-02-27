@@ -25,6 +25,7 @@ function makeTmpDir(): string {
 
 function makeState(overrides: Partial<ReplState> = {}): ReplState {
   return {
+    version: 1,
     planFilename: "test-plan.md",
     startedAt: "2026-01-01T00:00:00Z",
     buildCommand: "npm run build",
