@@ -46,7 +46,7 @@ npx cortex-agents configure     # Pick your models interactively
 # Restart OpenCode — done.
 ```
 
-Your OpenCode session now has **12 specialized agents**, **33 tools**, and **16 domain skills**.
+Your OpenCode session now has **12 specialized agents**, **33 tools**, and **17 domain skills**.
 
 > **Built-in Agent Replacement** — Cortex automatically disables OpenCode's native `build` and `plan` agents (replaced by `implement` and `architect`). The `architect` agent becomes the default, promoting a planning-first workflow. Native agents are fully restored on `uninstall`.
 
@@ -226,11 +226,12 @@ State persists to `.cortex/repl-state.json` — survives context compaction, ses
 
 ## Skills
 
-16 domain-specific skill packs loaded on demand:
+17 domain-specific skill packs loaded on demand:
 
 | Skill | Covers |
 |-------|--------|
 | `frontend-development` | React, Vue, Svelte, CSS architecture, accessibility |
+| `ui-design` | Visual hierarchy, typography, color systems, spacing, motion, professional polish |
 | `backend-development` | API design, middleware, auth, caching, queue systems |
 | `mobile-development` | React Native, Flutter, native iOS/Android patterns |
 | `desktop-development` | Electron, Tauri, native desktop application patterns |
@@ -462,7 +463,7 @@ src/
   __tests__/                 Test files mirror src/ structure
 .opencode/
   agents/                    12 agent definition files (.md frontmatter)
-  skills/                    16 skill pack directories (SKILL.md each)
+  skills/                    17 skill pack directories (SKILL.md each)
 ```
 
 ### What We're Looking For

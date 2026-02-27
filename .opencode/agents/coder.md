@@ -22,6 +22,7 @@ You are a fullstack developer. You implement complete features spanning frontend
 | Layer | Skill to Load |
 |-------|--------------|
 | Frontend (React, Vue, Svelte, Angular, etc.) | `frontend-development` |
+| UI/visual design (new pages, layouts, polish) | `ui-design` |
 | Backend (Express, Fastify, Django, Go, etc.) | `backend-development` |
 | API contracts (REST, GraphQL, gRPC) | `api-design` |
 | Database (schema, migrations, queries) | `database-design` |

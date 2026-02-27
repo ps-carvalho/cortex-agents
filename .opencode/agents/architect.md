@@ -172,6 +172,7 @@ Before creating a plan, load relevant skills to inform your analysis. Use the `s
 | Security requirements, threat models | `security-hardening` |
 | CI/CD pipeline design, deployment strategy | `deployment-automation` |
 | Frontend architecture, component design | `frontend-development` |
+| UI design, visual design, page layouts | `ui-design` |
 | Backend service design, middleware, auth | `backend-development` |
 | Mobile app architecture | `mobile-development` |
 | Desktop app architecture | `desktop-development` |
