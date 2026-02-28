@@ -3,6 +3,7 @@ import type { PluginInput } from "@opencode-ai/plugin";
 import * as fs from "fs";
 import * as path from "path";
 import { git } from "../utils/shell.js";
+import { detectWorktreeInfo } from "../utils/worktree-detect.js";
 
 const WORKTREE_ROOT = ".worktrees";
 
@@ -189,7 +190,21 @@ export function createRemove(client: Client) {
     },
     async execute(args, context) {
       const { name, deleteBranch = false } = args;
-      const worktreePath = path.join(context.worktree, WORKTREE_ROOT, name);
+
+      // Resolve the main repo root — if we're inside a worktree, context.worktree
+      // points to the worktree itself, not the main repo. We need the main repo
+      // to construct the correct .worktrees/ path and to run git commands from outside.
+      let mainRepoRoot = context.worktree;
+      try {
+        const info = await detectWorktreeInfo(context.worktree);
+        if (info.isWorktree && info.mainWorktreePath) {
+          mainRepoRoot = info.mainWorktreePath;
+        }
+      } catch {
+        // Fall back to context.worktree
+      }
+
+      const worktreePath = path.join(mainRepoRoot, WORKTREE_ROOT, name);
       const absoluteWorktreePath = path.resolve(worktreePath);
 
       // Check if worktree exists
@@ -208,13 +223,14 @@ Use worktree_list to see existing worktrees.`;
         // Ignore error, branch detection is optional
       }
 
-      // Remove the worktree
+      // Remove the worktree — must run from the main repo, not from inside
+      // the worktree being removed (git rejects that).
       try {
-        await git(context.worktree, "worktree", "remove", absoluteWorktreePath);
+        await git(mainRepoRoot, "worktree", "remove", absoluteWorktreePath);
       } catch {
         // Try force remove if there are changes
         try {
-          await git(context.worktree, "worktree", "remove", "--force", absoluteWorktreePath);
+          await git(mainRepoRoot, "worktree", "remove", "--force", absoluteWorktreePath);
         } catch (error2: any) {
           try {
             await client.tui.showToast({
@@ -239,7 +255,7 @@ The worktree may have uncommitted changes. Commit or stash them first.`;
       // Delete branch if requested
       if (deleteBranch && branchName) {
         try {
-          await git(context.worktree, "branch", "-d", branchName);
+          await git(mainRepoRoot, "branch", "-d", branchName);
           output += `\n\u2713 Deleted branch ${branchName}`;
         } catch (error: any) {
           output += `\n\u26A0 Could not delete branch ${branchName}: ${error.message || error}`;
