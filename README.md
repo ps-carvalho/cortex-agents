@@ -91,9 +91,8 @@ User Request
 You: "Add user authentication"
 
 Architect Agent                         reads codebase, creates plan with mermaid diagrams
-   saves to .cortex/plans/             commits plan to feature branch
-   "Plan committed. Switch to          offers worktree or branch
-    Implement?"
+   saves to .cortex/plans/             commits plan on current branch
+   "Plan committed. Proceed?"          offers worktree, branch, or stay
 
 Implement Agent                         loads plan, checks git status
    repl_init → parses tasks + ACs      iterates task-by-task with build+test
@@ -123,7 +122,7 @@ Handle complex, multi-step work. Use your best model.
 
 | Agent | Role | Key Capabilities |
 |-------|------|-----------------|
-| **architect** | Read-only analysis & planning | Plans with mermaid diagrams, acceptance criteria, NFR analysis. Commits plans to branches. Delegates read-only analysis to `@security`, `@coder`, `@perf`. |
+| **architect** | Read-only analysis & planning | Plans with mermaid diagrams, acceptance criteria, NFR analysis. Commits plans and defers branch creation to handoff. Delegates read-only analysis to `@security`, `@coder`, `@perf`. |
 | **implement** | Full-access development | Skill-aware implementation, REPL loop with ACs, two-phase quality gate, parallel sub-agent orchestration, task finalizer. |
 | **fix** | Quick turnaround bug fixes | Rapid diagnosis, scope-based quality gate, optional REPL loop. Delegates deep debugging to `@debug`. |
 
