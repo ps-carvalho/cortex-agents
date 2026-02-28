@@ -1,0 +1,140 @@
+{
+  "planFilename": "2026-02-28-bugfix-fix-architect-worktree-branch-conflict-error.md",
+  "startedAt": "2026-02-28T20:25:14.965Z",
+  "buildCommand": "npx tsc --noEmit",
+  "testCommand": "npx vitest run",
+  "lintCommand": null,
+  "maxRetries": 3,
+  "currentTaskIndex": -1,
+  "tasks": [
+    {
+      "index": 0,
+      "description": "Fix worktree.ts: Add deduplicateBranch() helper function that appends -2, -3 ... -10 suffix to find unique branch name",
+      "acceptanceCriteria": [],
+      "status": "passed",
+      "retries": 0,
+      "iterations": [
+        {
+          "at": "2026-02-28T20:29:34.199Z",
+          "result": "pass",
+          "detail": "Added deduplicateBranch() helper + updated both fromBranch and no-fromBranch paths with auto-deduplication + deduplication note in success message. Build clean, 447/447 tests pass."
+        }
+      ],
+      "startedAt": "2026-02-28T20:25:17.485Z",
+      "completedAt": "2026-02-28T20:29:34.199Z"
+    },
+    {
+      "index": 1,
+      "description": "Fix worktree.ts: Update fromBranch path (lines 63-86) to auto-deduplicate when branch exists and is checked out",
+      "acceptanceCriteria": [],
+      "status": "passed",
+      "retries": 0,
+      "iterations": [
+        {
+          "at": "2026-02-28T20:29:41.772Z",
+          "result": "pass",
+          "detail": "Completed in Task #1 batch — fromBranch path rewritten with 3-tier fallback: use existing → create new → deduplicate."
+        }
+      ],
+      "startedAt": "2026-02-28T20:29:34.199Z",
+      "completedAt": "2026-02-28T20:29:41.772Z"
+    },
+    {
+      "index": 2,
+      "description": "Fix worktree.ts: Update no-fromBranch path (lines 87-110) to auto-deduplicate when branch exists and is checked out",
+      "acceptanceCriteria": [],
+      "status": "passed",
+      "retries": 0,
+      "iterations": [
+        {
+          "at": "2026-02-28T20:29:45.969Z",
+          "result": "pass",
+          "detail": "Completed in Task #1 batch — no-fromBranch path rewritten with 3-tier fallback: create new → use existing → deduplicate."
+        }
+      ],
+      "startedAt": "2026-02-28T20:29:41.772Z",
+      "completedAt": "2026-02-28T20:29:45.969Z"
+    },
+    {
+      "index": 3,
+      "description": "Fix worktree.ts: Ensure success message reports the ACTUAL branch name used (may differ from requested)",
+      "acceptanceCriteria": [],
+      "status": "passed",
+      "retries": 0,
+      "iterations": [
+        {
+          "at": "2026-02-28T20:29:49.993Z",
+          "result": "pass",
+          "detail": "Completed in Task #1 batch — added originalBranch, deduplicated flag, and dedupeNote in the success message."
+        }
+      ],
+      "startedAt": "2026-02-28T20:29:45.969Z",
+      "completedAt": "2026-02-28T20:29:49.993Z"
+    },
+    {
+      "index": 4,
+      "description": "Fix architect.md: Add worktree_create and worktree_list to frontmatter tools section",
+      "acceptanceCriteria": [],
+      "status": "passed",
+      "retries": 0,
+      "iterations": [
+        {
+          "at": "2026-02-28T20:30:27.196Z",
+          "result": "pass",
+          "detail": "Added worktree_create: true and worktree_list: true to architect.md frontmatter tools section (lines 26-27)."
+        }
+      ],
+      "startedAt": "2026-02-28T20:29:49.993Z",
+      "completedAt": "2026-02-28T20:30:27.196Z"
+    },
+    {
+      "index": 5,
+      "description": "Fix architect.md: Update Step 5 worktree instructions to pass fromBranch parameter",
+      "acceptanceCriteria": [],
+      "status": "passed",
+      "retries": 0,
+      "iterations": [
+        {
+          "at": "2026-02-28T20:30:30.655Z",
+          "result": "pass",
+          "detail": "Updated Step 5 to include fromBranch parameter from plan_commit, added note about auto-deduplication, and emphasized reporting actual branch name."
+        }
+      ],
+      "startedAt": "2026-02-28T20:30:27.196Z",
+      "completedAt": "2026-02-28T20:30:30.655Z"
+    },
+    {
+      "index": 6,
+      "description": "Fix architect.md: Add worktree_create and worktree_list to Tool Usage section",
+      "acceptanceCriteria": [],
+      "status": "passed",
+      "retries": 0,
+      "iterations": [
+        {
+          "at": "2026-02-28T20:30:34.011Z",
+          "result": "pass",
+          "detail": "Added worktree_create and worktree_list entries to Tool Usage section at bottom of architect.md (lines 335-336)."
+        }
+      ],
+      "startedAt": "2026-02-28T20:30:30.655Z",
+      "completedAt": "2026-02-28T20:30:34.011Z"
+    },
+    {
+      "index": 7,
+      "description": "Add tests for branch deduplication logic (normal, reuse, deduplicate, exhaustion cases)",
+      "acceptanceCriteria": [],
+      "status": "passed",
+      "retries": 0,
+      "iterations": [
+        {
+          "at": "2026-02-28T20:33:06.710Z",
+          "result": "pass",
+          "detail": "Extracted deduplicateBranch to utils/worktree-detect.ts for testability. Added 4 tests: base exists → -2, base + -2 exist → -3, exhaustion throws after 10, nonexistent → -2. All 451 tests pass."
+        }
+      ],
+      "startedAt": "2026-02-28T20:30:34.011Z",
+      "completedAt": "2026-02-28T20:33:06.710Z"
+    }
+  ],
+  "completedAt": "2026-02-28T20:33:06.710Z"
+}
