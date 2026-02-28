@@ -154,6 +154,17 @@ Implement Agent detects: package.json has React + Express + Prisma
   -> implements with deep framework-specific knowledge
 ```
 
+### Design Spec Enforcement
+
+All UI work is governed by a **mandatory design spec** (`.cortex/design-spec.md`). When any agent loads the `ui-design` skill:
+
+1. **Check** — looks for `.cortex/design-spec.md`
+2. **Create if missing** — analyzes the entire app (components, styles, Tailwind config, theme files, CSS variables) and synthesizes a spec covering brand identity, color palette, typography, spacing, component patterns, and look & feel
+3. **Follow it** — every color, font, spacing value, and component pattern must align with the spec
+4. **Extend it** — if a task needs something not in the spec, the spec is updated first
+
+This ensures visual consistency across all agents and sessions — no more one-off colors, mismatched radii, or inconsistent button styles.
+
 ---
 
 ## Tools
@@ -230,7 +241,7 @@ State persists to `.cortex/repl-state.json` — survives context compaction, ses
 | Skill | Covers |
 |-------|--------|
 | `frontend-development` | React, Vue, Svelte, CSS architecture, accessibility |
-| `ui-design` | Visual hierarchy, typography, color systems, spacing, motion, professional polish |
+| `ui-design` | Visual hierarchy, typography, color systems, spacing, motion, professional polish. **Enforces a mandatory design spec** (`.cortex/design-spec.md`) — auto-creates from codebase analysis if missing, ensuring brand consistency across all UI work. |
 | `backend-development` | API design, middleware, auth, caching, queue systems |
 | `mobile-development` | React Native, Flutter, native iOS/Android patterns |
 | `desktop-development` | Electron, Tauri, native desktop application patterns |
@@ -365,6 +376,7 @@ quality_gate_summary receives reports from 6 agents:
 your-project/
   .cortex/                     Project context (auto-initialized)
      config.json              Configuration
+     design-spec.md           UI design spec — branding, colors, typography, patterns
      plans/                   Implementation plans
      sessions/                Session summaries
      repl-state.json          REPL loop progress (auto-managed)
