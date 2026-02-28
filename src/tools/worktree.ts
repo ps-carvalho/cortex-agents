@@ -3,7 +3,7 @@ import type { PluginInput } from "@opencode-ai/plugin";
 import * as fs from "fs";
 import * as path from "path";
 import { git } from "../utils/shell.js";
-import { detectWorktreeInfo } from "../utils/worktree-detect.js";
+import { detectWorktreeInfo, deduplicateBranch } from "../utils/worktree-detect.js";
 
 const WORKTREE_ROOT = ".worktrees";
 
@@ -35,7 +35,9 @@ export function createCreate(client: Client) {
     },
     async execute(args, context) {
       const { name, type, fromBranch } = args;
-      const branchName = fromBranch || `${type}/${name}`;
+      let branchName = fromBranch || `${type}/${name}`;
+      const originalBranch = branchName;
+      let deduplicated = false;
       const worktreePath = path.join(context.worktree, WORKTREE_ROOT, name);
       const absoluteWorktreePath = path.resolve(worktreePath);
 
@@ -68,20 +70,28 @@ Use worktree_list to see existing worktrees.`;
           // Branch might not exist yet — create it
           try {
             await git(context.worktree, "worktree", "add", "-b", fromBranch, absoluteWorktreePath);
-          } catch (error2: any) {
+          } catch {
+            // Both failed — try deduplication
             try {
-              await client.tui.showToast({
-                body: {
-                  title: `Worktree: ${name}`,
-                  message: `Failed to create from branch '${fromBranch}': ${error2.message || error2}`,
-                  variant: "error",
-                  duration: 8000,
-                },
-              });
-            } catch {
-              // Toast failure is non-fatal
+              const uniqueBranch = await deduplicateBranch(context.worktree, fromBranch);
+              await git(context.worktree, "worktree", "add", "-b", uniqueBranch, absoluteWorktreePath);
+              branchName = uniqueBranch;
+              deduplicated = true;
+            } catch (error3: any) {
+              try {
+                await client.tui.showToast({
+                  body: {
+                    title: `Worktree: ${name}`,
+                    message: `Failed to create from branch '${fromBranch}': ${error3.message || error3}`,
+                    variant: "error",
+                    duration: 8000,
+                  },
+                });
+              } catch {
+                // Toast failure is non-fatal
+              }
+              return `\u2717 Error creating worktree from branch '${fromBranch}': ${error3.message || error3}`;
             }
-            return `\u2717 Error creating worktree from branch '${fromBranch}': ${error2.message || error2}`;
           }
         }
       } else {
@@ -92,20 +102,28 @@ Use worktree_list to see existing worktrees.`;
           // Branch might already exist, try without -b
           try {
             await git(context.worktree, "worktree", "add", absoluteWorktreePath, branchName);
-          } catch (error2: any) {
+          } catch {
+            // Both failed — try deduplication
             try {
-              await client.tui.showToast({
-                body: {
-                  title: `Worktree: ${name}`,
-                  message: `Failed to create: ${error2.message || error2}`,
-                  variant: "error",
-                  duration: 8000,
-                },
-              });
-            } catch {
-              // Toast failure is non-fatal
+              const uniqueBranch = await deduplicateBranch(context.worktree, branchName);
+              await git(context.worktree, "worktree", "add", "-b", uniqueBranch, absoluteWorktreePath);
+              branchName = uniqueBranch;
+              deduplicated = true;
+            } catch (error3: any) {
+              try {
+                await client.tui.showToast({
+                  body: {
+                    title: `Worktree: ${name}`,
+                    message: `Failed to create: ${error3.message || error3}`,
+                    variant: "error",
+                    duration: 8000,
+                  },
+                });
+              } catch {
+                // Toast failure is non-fatal
+              }
+              return `\u2717 Error creating worktree: ${error3.message || error3}`;
             }
-            return `\u2717 Error creating worktree: ${error2.message || error2}`;
           }
         }
       }
@@ -125,10 +143,14 @@ Use worktree_list to see existing worktrees.`;
         // Toast failure is non-fatal
       }
 
+      const dedupeNote = deduplicated
+        ? `\n\nNote: Branch '${originalBranch}' was unavailable. Using '${branchName}' instead.`
+        : "";
+
       return `\u2713 Created worktree successfully
 
 Branch: ${branchName}${fromLabel}
-Path: ${absoluteWorktreePath}
+Path: ${absoluteWorktreePath}${dedupeNote}
 
 To work in this worktree:
   cd ${absoluteWorktreePath}

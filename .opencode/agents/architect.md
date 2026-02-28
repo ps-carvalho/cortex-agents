@@ -23,6 +23,8 @@ tools:
   session_list: true
   branch_status: true
   branch_create: true
+  worktree_create: true
+  worktree_list: true
   docs_list: true
   github_status: true
   github_issues: true
@@ -141,8 +143,9 @@ After committing the plan, use the **question tool** with these exact options:
 **Only after the user selects an option**, execute the corresponding action:
 
 - **User chose "Create a worktree"**:
-  - Use `worktree_create` with `name` derived from the suggested branch slug and `type` from the plan type
-  - Report the worktree path so the user can navigate to it
+  - Use `worktree_create` with `name` derived from the suggested branch slug, `type` from the plan type, and `fromBranch` set to the suggested branch name from `plan_commit`
+  - The tool auto-deduplicates if the branch already exists (appends `-2`, `-3`, etc.)
+  - Report the worktree path and **actual branch name** (may differ from suggestion if deduplicated)
   - Suggest: "Navigate to the worktree and run OpenCode with the Implement agent to begin implementation"
 
 - **User chose "Create a branch"**:
@@ -329,6 +332,8 @@ sequenceDiagram
 - `session_save` - Save session summary
 - `branch_status` - Check current git state
 - `branch_create` - Create a new branch (used during handoff to implementation)
+- `worktree_create` - Create an isolated worktree for parallel development (used during handoff)
+- `worktree_list` - List existing worktrees (check before creating)
 - `github_status` - Check GitHub CLI availability, auth, and detect projects
 - `github_issues` - List/filter GitHub issues for work item selection
 - `github_projects` - List GitHub Project boards and their work items

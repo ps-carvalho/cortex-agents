@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { detectWorktreeInfo } from "../worktree-detect.js";
+import { detectWorktreeInfo, deduplicateBranch } from "../worktree-detect.js";
 import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
@@ -49,6 +49,84 @@ describe("detectWorktreeInfo", () => {
 
     // Clean up
     execFileSync("git", ["-C", mainRepo, "worktree", "remove", "--force", wtPath]);
+    fs.rmSync(tmpDir, { recursive: true });
+  });
+});
+
+describe("deduplicateBranch", () => {
+  it("returns -2 suffix when base branch exists", async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "cortex-dedupe-"));
+    const mainRepo = path.join(tmpDir, "main");
+
+    // Create a git repo with initial commit
+    fs.mkdirSync(mainRepo, { recursive: true });
+    execFileSync("git", ["init", mainRepo]);
+    execFileSync("git", ["-C", mainRepo, "commit", "--allow-empty", "-m", "init"]);
+
+    // Create the base branch
+    execFileSync("git", ["-C", mainRepo, "branch", "feature/test"]);
+
+    const result = await deduplicateBranch(mainRepo, "feature/test");
+    expect(result).toBe("feature/test-2");
+
+    // Clean up
+    fs.rmSync(tmpDir, { recursive: true });
+  });
+
+  it("returns -3 when both base and -2 exist", async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "cortex-dedupe-"));
+    const mainRepo = path.join(tmpDir, "main");
+
+    // Create a git repo with initial commit
+    fs.mkdirSync(mainRepo, { recursive: true });
+    execFileSync("git", ["init", mainRepo]);
+    execFileSync("git", ["-C", mainRepo, "commit", "--allow-empty", "-m", "init"]);
+
+    // Create base branch and -2
+    execFileSync("git", ["-C", mainRepo, "branch", "feature/test"]);
+    execFileSync("git", ["-C", mainRepo, "branch", "feature/test-2"]);
+
+    const result = await deduplicateBranch(mainRepo, "feature/test");
+    expect(result).toBe("feature/test-3");
+
+    // Clean up
+    fs.rmSync(tmpDir, { recursive: true });
+  });
+
+  it("throws after 10 attempts", async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "cortex-dedupe-"));
+    const mainRepo = path.join(tmpDir, "main");
+
+    // Create a git repo with initial commit
+    fs.mkdirSync(mainRepo, { recursive: true });
+    execFileSync("git", ["init", mainRepo]);
+    execFileSync("git", ["-C", mainRepo, "commit", "--allow-empty", "-m", "init"]);
+
+    // Create all 9 branches: -2 through -10
+    for (let i = 2; i <= 10; i++) {
+      execFileSync("git", ["-C", mainRepo, "branch", `feature/test-${i}`]);
+    }
+
+    await expect(deduplicateBranch(mainRepo, "feature/test")).rejects.toThrow("10 attempts");
+
+    // Clean up
+    fs.rmSync(tmpDir, { recursive: true });
+  });
+
+  it("returns -2 when base name doesn't exist as a branch", async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "cortex-dedupe-"));
+    const mainRepo = path.join(tmpDir, "main");
+
+    // Create a git repo with initial commit
+    fs.mkdirSync(mainRepo, { recursive: true });
+    execFileSync("git", ["init", mainRepo]);
+    execFileSync("git", ["-C", mainRepo, "commit", "--allow-empty", "-m", "init"]);
+
+    // No branches created - nonexistent/branch doesn't exist
+    const result = await deduplicateBranch(mainRepo, "nonexistent/branch");
+    expect(result).toBe("nonexistent/branch-2");
+
+    // Clean up
     fs.rmSync(tmpDir, { recursive: true });
   });
 });

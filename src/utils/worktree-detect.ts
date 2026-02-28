@@ -2,6 +2,19 @@ import * as path from "path";
 import { git } from "./shell.js";
 
 /**
+ * Finds a unique branch name by appending -2, -3, etc. if the base name exists.
+ * Returns the first available candidate from baseName-2 through baseName-10.
+ */
+export async function deduplicateBranch(cwd: string, baseName: string): Promise<string> {
+  for (let i = 2; i <= 10; i++) {
+    const candidate = `${baseName}-${i}`;
+    const { stdout } = await git(cwd, "branch", "--list", candidate);
+    if (!stdout.trim()) return candidate;
+  }
+  throw new Error(`Could not find unique branch name after 10 attempts (base: ${baseName})`);
+}
+
+/**
  * Information about the current worktree context.
  */
 export interface WorktreeInfo {
