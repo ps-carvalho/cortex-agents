@@ -1,6 +1,6 @@
 {
   "name": "cortex-agents",
-  "version": "4.0.7",
+  "version": "4.0.8",
   "description": "Supercharge OpenCode with structured workflows, intelligent agents, and automated development practices",
   "type": "module",
   "main": "dist/index.js",
