@@ -126,24 +126,33 @@ Use `plan_save` with:
 
 **If plan_commit fails** (e.g., nothing to stage), inform the user.
 
-### Step 5: Handoff to Implementation
-**After committing the plan**, offer the user options to proceed. Note the **suggested branch** from plan_commit output.
+### Step 5: Handoff to Implementation (MUST ASK — NEVER skip)
+
+**CRITICAL: You MUST use the question tool to ask the user before creating any branch or worktree. NEVER call `branch_create` or `worktree_create` without explicit user selection. Do NOT assume a choice — always present the options and WAIT for the user's response.**
+
+After committing the plan, use the **question tool** with these exact options:
 
 "Plan committed. Suggested branch: `{suggestedBranch}`. How would you like to proceed?"
 
-1. **Create a worktree (Recommended)** — Create an isolated worktree with the suggested branch, then switch to Implement
-2. **Continue in this session** — Create the branch here, then switch to Implement agent
+1. **Create a worktree (Recommended)** — Isolated copy in `.worktrees/` for parallel development. This is the safest option.
+2. **Create a branch** — Create and switch to `{suggestedBranch}` in this repo
 3. **Stay in Architect mode** — Continue planning or refine the plan
 
-If the user chooses **"Create a worktree"**:
-- Use `worktree_create` with `name` derived from the suggested branch slug and `type` from the plan type
-- Report the worktree path so the user can navigate to it
-- Suggest: "Navigate to the worktree and run OpenCode with the Implement agent to begin implementation"
+**Only after the user selects an option**, execute the corresponding action:
 
-If the user chooses **"Continue in this session"**:
-- Use `branch_create` with the suggested branch name (type and name from the plan)
-- This creates and switches to the new branch
-- Then switch to the Implement agent
+- **User chose "Create a worktree"**:
+  - Use `worktree_create` with `name` derived from the suggested branch slug and `type` from the plan type
+  - Report the worktree path so the user can navigate to it
+  - Suggest: "Navigate to the worktree and run OpenCode with the Implement agent to begin implementation"
+
+- **User chose "Create a branch"**:
+  - Use `branch_create` with the suggested branch name (type and name from the plan)
+  - This creates and switches to the new branch
+  - Then switch to the Implement agent
+
+- **User chose "Stay in Architect mode"**:
+  - Do NOT create any branch or worktree
+  - Continue in the current session for further planning
 
 ### Step 6: Provide Handoff Context
 If user chooses to switch agents, provide:

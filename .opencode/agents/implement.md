@@ -88,37 +88,40 @@ If a plan exists, load it with `plan_load`.
 
 **Suggested branch detection:** If the loaded plan has a `branch` field in its frontmatter (set by `plan_commit`), this is the **suggested branch name** for implementation. The branch may or may not exist yet — `plan_commit` only writes the suggestion, it does not create the branch.
 
-### Step 4: Ask User About Branch Strategy
+### Step 4: Ask User About Branch Strategy (MUST ASK — NEVER skip)
+
+**CRITICAL: You MUST use the question tool to ask the user before creating any branch or worktree. NEVER call `branch_create` or `worktree_create` without explicit user selection. Do NOT assume a choice — always present the options and WAIT for the user's response.**
 
 **If you are already on the suggested branch (it was created during architect handoff):**
 Skip the branch creation prompt entirely — you're already set up. Inform the user:
 "You're on the plan branch `{branch}`. Ready to implement."
 
 **If the plan has a `branch` field BUT the branch doesn't exist yet or you're on a different branch:**
-Offer to create it:
+Use the **question tool** with these options:
 
 "The plan suggests branch `{branch}`. How would you like to proceed?"
 
-Options:
-1. **Create a worktree (Recommended)** — Isolated copy with the suggested branch name
+1. **Create a worktree (Recommended)** — Isolated copy with the suggested branch name. This is the safest option.
 2. **Create the branch here** — Create and switch to `{branch}` in this repo
 3. **Create a different branch** — Use a custom branch name
 4. **Continue here** — Only if you're certain (not recommended on protected branches)
 
 **If no plan exists AND on a protected branch:**
-Use the original prompt:
+Use the **question tool** with these options:
 
 "I'm ready to implement changes. How would you like to proceed?"
 
-Options:
-1. **Create a worktree (Recommended)** - Isolated copy in .worktrees/ for parallel development
-2. **Create a new branch** - Stay in this repo, create feature/bugfix branch
-3. **Continue here** - Only if you're certain (not recommended on protected branches)
+1. **Create a worktree (Recommended)** — Isolated copy in `.worktrees/` for parallel development. This is the safest option.
+2. **Create a new branch** — Stay in this repo, create feature/bugfix branch
+3. **Continue here** — Only if you're certain (not recommended on protected branches)
 
 ### Step 5: Execute Based on Response
-- **Worktree**: Use `worktree_create` with appropriate type and name. Report the worktree path. Continue working in the current session.
-- **Create branch**: Use `branch_create` with the suggested branch name (or custom name)
-- **Continue**: Proceed with caution, warn user about risks
+
+**Only after the user selects an option**, execute the corresponding action:
+
+- **User chose "Worktree"**: Use `worktree_create` with appropriate type and name. Report the worktree path. Continue working in the current session.
+- **User chose "Create branch"**: Use `branch_create` with the suggested branch name (or custom name)
+- **User chose "Continue"**: Proceed with caution, warn user about risks
 
 ### Step 6: REPL Implementation Loop
 
