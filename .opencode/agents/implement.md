@@ -86,26 +86,26 @@ If `./opencode.json` does not have agent model configuration, offer to configure
 Run `plan_list` to see if there's a relevant plan for this work.
 If a plan exists, load it with `plan_load`.
 
-**Plan branch detection:** If the loaded plan has a `branch` field in its frontmatter (set by the architect's `plan_commit`), note the branch name. This branch already contains the committed plan and `.cortex/` artifacts. You should use this branch for implementation.
+**Suggested branch detection:** If the loaded plan has a `branch` field in its frontmatter (set by `plan_commit`), this is the **suggested branch name** for implementation. The branch may or may not exist yet — `plan_commit` only writes the suggestion, it does not create the branch.
 
 ### Step 4: Ask User About Branch Strategy
 
-**If the plan has a `branch` field AND you are already on that branch:**
+**If you are already on the suggested branch (it was created during architect handoff):**
 Skip the branch creation prompt entirely — you're already set up. Inform the user:
 "You're on the plan branch `{branch}`. Ready to implement."
 
-**If the plan has a `branch` field BUT you are on a different branch (e.g., main):**
-Offer to switch or create a worktree from the plan branch:
+**If the plan has a `branch` field BUT the branch doesn't exist yet or you're on a different branch:**
+Offer to create it:
 
-"The plan has a branch `{branch}`. How would you like to proceed?"
+"The plan suggests branch `{branch}`. How would you like to proceed?"
 
 Options:
-1. **Create a worktree from the plan branch (Recommended)** — Isolated copy using the existing `{branch}`
-2. **Switch to the plan branch** — Checkout `{branch}` directly in this repo
-3. **Create a new branch** — Ignore the plan branch, start fresh
+1. **Create a worktree (Recommended)** — Isolated copy with the suggested branch name
+2. **Create the branch here** — Create and switch to `{branch}` in this repo
+3. **Create a different branch** — Use a custom branch name
 4. **Continue here** — Only if you're certain (not recommended on protected branches)
 
-**If no plan branch exists AND on a protected branch:**
+**If no plan exists AND on a protected branch:**
 Use the original prompt:
 
 "I'm ready to implement changes. How would you like to proceed?"
@@ -116,10 +116,8 @@ Options:
 3. **Continue here** - Only if you're certain (not recommended on protected branches)
 
 ### Step 5: Execute Based on Response
-- **Worktree from plan branch**: Use `worktree_create` with `fromBranch` set to the plan branch. Report the worktree path. Continue working in the current session.
-- **Worktree (new branch)**: Use `worktree_create` with appropriate type. Report the worktree path. Continue working in the current session.
-- **Switch to plan branch**: Use `branch_switch` with the plan branch name
-- **Branch**: Use `branch_create` with appropriate type (feature/bugfix/refactor)
+- **Worktree**: Use `worktree_create` with appropriate type and name. Report the worktree path. Continue working in the current session.
+- **Create branch**: Use `branch_create` with the suggested branch name (or custom name)
 - **Continue**: Proceed with caution, warn user about risks
 
 ### Step 6: REPL Implementation Loop

@@ -22,6 +22,7 @@ tools:
   session_save: true
   session_list: true
   branch_status: true
+  branch_create: true
   docs_list: true
   github_status: true
   github_issues: true
@@ -110,39 +111,44 @@ Use `plan_save` with:
 - Full plan content including mermaid diagrams
 - Task list
 
-### Step 4.5: Commit Plan to Branch (MANDATORY)
+### Step 4.5: Commit Plan (MANDATORY)
 
-**After saving the plan**, commit it to a dedicated branch to keep `main` clean:
+**After saving the plan**, commit the `.cortex/` artifacts on the current branch:
 
 1. Call `plan_commit` with the plan filename from Step 4
 2. This automatically:
-   - Creates a branch (`feature/`, `bugfix/`, `refactor/`, or `docs/` prefix based on plan type)
-   - Updates the plan frontmatter with `branch: feature/xyz`
+   - Computes a suggested branch name (`feature/`, `bugfix/`, `refactor/`, or `docs/` prefix based on plan type)
+   - Writes the suggested branch into the plan frontmatter as `branch: feature/xyz`
    - Stages all `.cortex/` artifacts
    - Commits with `chore(plan): {title}`
-3. The plan and `.cortex/` artifacts now live on the feature branch, not `main`
-4. Report the branch name to the user
+3. **No branch is created** — the plan is committed on the current branch. Branch creation happens during handoff.
+4. Report the suggested branch name to the user
 
-**If plan_commit fails** (e.g., uncommitted changes blocking checkout), inform the user and suggest they stash or commit their changes first.
+**If plan_commit fails** (e.g., nothing to stage), inform the user.
 
 ### Step 5: Handoff to Implementation
-**After committing the plan**, offer the user options to proceed:
+**After committing the plan**, offer the user options to proceed. Note the **suggested branch** from plan_commit output.
 
-"Plan committed to `{branch}`. How would you like to proceed?"
+"Plan committed. Suggested branch: `{suggestedBranch}`. How would you like to proceed?"
 
-1. **Create a worktree (Recommended)** — Create an isolated worktree from the plan branch, then switch to Implement
-2. **Switch to Implement agent** — Hand off for implementation on the plan branch in this repo
+1. **Create a worktree (Recommended)** — Create an isolated worktree with the suggested branch, then switch to Implement
+2. **Continue in this session** — Create the branch here, then switch to Implement agent
 3. **Stay in Architect mode** — Continue planning or refine the plan
 
-If the user chooses "Create a worktree":
-- Use `worktree_create` with `fromBranch` set to the plan branch name
+If the user chooses **"Create a worktree"**:
+- Use `worktree_create` with `name` derived from the suggested branch slug and `type` from the plan type
 - Report the worktree path so the user can navigate to it
 - Suggest: "Navigate to the worktree and run OpenCode with the Implement agent to begin implementation"
+
+If the user chooses **"Continue in this session"**:
+- Use `branch_create` with the suggested branch name (type and name from the plan)
+- This creates and switches to the new branch
+- Then switch to the Implement agent
 
 ### Step 6: Provide Handoff Context
 If user chooses to switch agents, provide:
 - Plan file location
-- **Actual branch name** (from plan_commit result, not a suggestion)
+- **Branch name** (the one just created during handoff)
 - Key tasks to implement first
 - Critical decisions to follow
 
@@ -156,7 +162,7 @@ If user chooses to switch agents, provide:
 - Think about scalability, maintainability, and performance
 - Never write or modify code files — only analyze and advise
 - Always save plans for future reference
-- Always commit plans to a branch to keep main clean
+- Always commit plans via plan_commit for persistence
 
 ## Skill Loading (load based on plan topic)
 
@@ -264,8 +270,8 @@ sequenceDiagram
 ## Suggested Branch Name
 `feature/[descriptive-name]` or `refactor/[descriptive-name]`
 
-> **Note**: The actual branch is created by `plan_commit` in Step 4.5.
-> The branch name is written into the plan frontmatter as `branch: feature/xyz`.
+> **Note**: `plan_commit` writes a suggested branch name into the plan frontmatter as `branch: feature/xyz`.
+> The actual branch is created during the handoff step (Step 5), not during plan_commit.
 ```
 
 ---
@@ -300,7 +306,7 @@ sequenceDiagram
 - You CANNOT launch implementation sub-agents (@testing, @audit, @devops, @refactor, @docs-writer)
 - You can only read, search, and analyze
 - You CAN save plans to .cortex/plans/
-- You CAN commit plans to a branch via `plan_commit` (creates branch + commits .cortex/ only)
+- You CAN commit plans via `plan_commit` (stages + commits .cortex/ on the current branch, no branch creation)
 - Always ask clarifying questions when requirements are unclear
 
 ## Tool Usage
@@ -310,9 +316,10 @@ sequenceDiagram
 - `plan_save` - Save implementation plan
 - `plan_list` - List existing plans
 - `plan_load` - Load a saved plan
-- `plan_commit` - Create branch from plan, commit .cortex/ artifacts, write branch to frontmatter
+- `plan_commit` - Commit .cortex/ artifacts on current branch, write suggested branch to frontmatter
 - `session_save` - Save session summary
 - `branch_status` - Check current git state
+- `branch_create` - Create a new branch (used during handoff to implementation)
 - `github_status` - Check GitHub CLI availability, auth, and detect projects
 - `github_issues` - List/filter GitHub issues for work item selection
 - `github_projects` - List GitHub Project boards and their work items

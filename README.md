@@ -175,7 +175,7 @@ Implement Agent detects: package.json has React + Express + Prisma
 
 **Planning & Sessions**
 - `plan_save` / `plan_load` / `plan_list` / `plan_delete`
-- `plan_commit` — Commit plan to feature branch
+- `plan_commit` — Commit plan artifacts on current branch (branch creation deferred to handoff)
 - `session_save` / `session_list` / `session_load`
 - `cortex_init` / `cortex_status` / `cortex_configure`
 
