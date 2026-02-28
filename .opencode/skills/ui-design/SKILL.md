@@ -21,6 +21,182 @@ Use this skill when:
 > For accessibility (WCAG, ARIA, keyboard navigation), see `frontend-development`.
 > For component implementation patterns (React, Vue, Svelte), see `frontend-development`.
 
+## Design Spec (MANDATORY — before ANY UI work)
+
+**Every project with a UI MUST have a design spec.** Before making any visual or layout changes, you must check for and use the project's design spec. All UI work must be consistent with this spec.
+
+### Step 1: Check for Existing Spec
+
+Look for `.cortex/design-spec.md` in the project root. If it exists, **read it and follow it** — every color, font, spacing value, and component pattern you use must align with the spec.
+
+### Step 2: Create Spec if Missing
+
+If `.cortex/design-spec.md` does NOT exist, you **MUST create one before writing any UI code**:
+
+1. **Analyze the existing app** — scan all frontend files (components, pages, layouts, stylesheets, Tailwind config, theme files, CSS variables) to extract the current visual identity
+2. **Identify existing patterns** — colors in use, font families, spacing conventions, border radii, shadow usage, component styles
+3. **Synthesize into a spec** — consolidate findings into a coherent design spec, resolving any inconsistencies by choosing the dominant or best pattern
+4. **Save to `.cortex/design-spec.md`** using the template below
+
+If the project has no existing UI (greenfield), generate a design spec based on the project type (SaaS, marketing, developer tool, etc.) and ask the user to confirm key branding choices (primary color, font family, overall feel) before proceeding.
+
+### Step 3: Reference the Spec During Implementation
+
+For every UI change:
+- Use **only** the colors defined in the spec
+- Use **only** the typography scale from the spec
+- Follow the spacing system in the spec
+- Match the component patterns (border radius, shadows, button styles) from the spec
+- Maintain the overall look & feel described in the spec
+
+If a task requires something not covered by the spec (e.g., a new component type, a new color for a new feature), **extend the spec first**, then implement.
+
+### Design Spec Template
+
+```markdown
+# Design Spec — [Project Name]
+
+> Auto-generated from codebase analysis. Keep this file updated as the design evolves.
+> Location: `.cortex/design-spec.md`
+
+## Brand Identity
+
+### Brand Personality
+- **Tone**: [e.g., Professional & approachable / Bold & playful / Minimal & technical]
+- **Feel**: [e.g., Modern SaaS / Enterprise / Developer tool / Consumer app]
+- **Keywords**: [3-5 adjectives, e.g., clean, trustworthy, fast, friendly]
+
+### Logo & Assets
+- Logo location: [path or "not yet defined"]
+- Favicon: [path or "not yet defined"]
+- Brand mark usage notes: [any constraints]
+
+## Color Palette
+
+### Primary
+- **Primary**: [hex] — [Tailwind class, e.g., `blue-600`]
+- **Primary hover**: [hex] — [Tailwind class]
+- **Primary light** (backgrounds): [hex] — [Tailwind class]
+- **Primary dark** (text on light): [hex] — [Tailwind class]
+
+### Accent (if applicable)
+- **Accent**: [hex] — [Tailwind class]
+
+### Neutrals
+- **Background**: [hex] — [Tailwind class]
+- **Surface** (cards, panels): [hex] — [Tailwind class]
+- **Border**: [hex] — [Tailwind class]
+- **Text primary**: [hex] — [Tailwind class]
+- **Text secondary**: [hex] — [Tailwind class]
+- **Text muted**: [hex] — [Tailwind class]
+
+### Semantic Colors
+- **Success**: [hex] — [Tailwind class]
+- **Warning**: [hex] — [Tailwind class]
+- **Error**: [hex] — [Tailwind class]
+- **Info**: [hex] — [Tailwind class]
+
+### Dark Mode (if applicable)
+[Repeat the above structure for dark mode overrides, or note "N/A"]
+
+## Typography
+
+### Font Families
+- **Headings**: [font name] — [source, e.g., Google Fonts / system / @fontsource]
+- **Body**: [font name] — [source]
+- **Monospace** (code): [font name] — [source]
+
+### Type Scale
+| Level | Size | Weight | Line Height | Tailwind |
+|-------|------|--------|-------------|----------|
+| Display | [px] | [weight] | [lh] | [classes] |
+| H1 | [px] | [weight] | [lh] | [classes] |
+| H2 | [px] | [weight] | [lh] | [classes] |
+| H3 | [px] | [weight] | [lh] | [classes] |
+| H4 | [px] | [weight] | [lh] | [classes] |
+| Body | [px] | [weight] | [lh] | [classes] |
+| Small | [px] | [weight] | [lh] | [classes] |
+| Caption | [px] | [weight] | [lh] | [classes] |
+
+## Spacing & Layout
+
+### Base Unit
+- **Base**: [e.g., 8px / 4px]
+- **Scale**: [list the spacing scale used, e.g., 4, 8, 12, 16, 24, 32, 48, 64]
+
+### Container
+- **Max width**: [e.g., max-w-7xl / 1280px]
+- **Page padding**: [e.g., px-4 sm:px-6 lg:px-8]
+
+### Content Density
+- **Target**: [Spacious / Balanced / Dense]
+
+## Component Patterns
+
+### Border Radius
+- **Cards / Modals**: [e.g., rounded-xl / 12px]
+- **Buttons / Inputs**: [e.g., rounded-lg / 8px]
+- **Badges / Pills**: [e.g., rounded-full]
+
+### Shadows
+- **Cards**: [e.g., shadow-sm]
+- **Dropdowns**: [e.g., shadow-md]
+- **Modals**: [e.g., shadow-lg]
+
+### Buttons
+| Variant | Classes |
+|---------|---------|
+| Primary | [full Tailwind classes] |
+| Secondary | [full Tailwind classes] |
+| Ghost | [full Tailwind classes] |
+| Destructive | [full Tailwind classes] |
+
+### Inputs
+- **Height**: [e.g., h-10 / 40px]
+- **Border**: [e.g., border border-gray-300]
+- **Focus**: [e.g., ring-2 ring-primary-500]
+- **Error**: [e.g., border-red-500 + text-sm text-red-600 message below]
+
+### Navigation Pattern
+- **Type**: [Top navbar / Sidebar / Bottom tabs]
+- **Active state**: [classes for active nav item]
+
+## Look & Feel
+
+### Overall Aesthetic
+[1-2 sentences describing the visual identity, e.g., "Clean, minimal interface with generous whitespace, subtle shadows, and a blue-primary palette that conveys trust and professionalism."]
+
+### Motion
+- **Hover transitions**: [e.g., transition-colors duration-150]
+- **Panel animations**: [e.g., transition-all duration-200 ease-in-out]
+- **Respect reduced motion**: [yes/no]
+
+### Iconography
+- **Icon library**: [e.g., Lucide / Heroicons / Phosphor]
+- **Default size**: [e.g., w-5 h-5 / 20px]
+- **Style**: [e.g., outline / solid / duotone]
+
+### Imagery
+- **Style**: [e.g., illustrations / photos / abstract]
+- **Source**: [e.g., in-house / Unsplash / none yet]
+
+## Do's and Don'ts
+
+### Do
+- [e.g., Use the primary color for all main CTAs]
+- [e.g., Maintain consistent padding inside cards (p-6)]
+- [e.g., Use skeleton loaders for async content]
+
+### Don't
+- [e.g., Don't use arbitrary hex colors outside the palette]
+- [e.g., Don't mix border radius values within the same context]
+- [e.g., Don't skip hover/focus states on interactive elements]
+```
+
+### Updating the Spec
+
+When you make intentional design changes (new component patterns, color additions, etc.), **update `.cortex/design-spec.md`** to reflect them. The spec is a living document that must stay in sync with the codebase.
+
 ## Visual Hierarchy & Layout
 
 ### Scanning Patterns

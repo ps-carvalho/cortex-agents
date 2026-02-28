@@ -150,7 +150,7 @@ Before fixing, load relevant skills. Use the `skill` tool.
 | API errors | `api-design` + `backend-development` |
 | Database issues | `database-design` |
 | Frontend rendering issues | `frontend-development` |
-| UI visual bugs, layout issues, design inconsistencies | `ui-design` |
+| UI visual bugs, layout issues, design inconsistencies | `ui-design` (**must check `.cortex/design-spec.md` first** — create if missing) |
 | Deployment or CI/CD failures | `deployment-automation` |
 
 ## Debugging Quick Reference

@@ -344,7 +344,7 @@ Detect the project's technology stack and load relevant skills BEFORE writing co
 | Signal | Skill to Load |
 |--------|--------------|
 | `package.json` has react/next/vue/nuxt/svelte/angular | `frontend-development` |
-| UI work: new pages, components, visual design, layout | `ui-design` |
+| UI work: new pages, components, visual design, layout | `ui-design` (**must check `.cortex/design-spec.md` first** — create if missing) |
 | `package.json` has express/fastify/hono/nest OR Python with flask/django/fastapi | `backend-development` |
 | Database files: `migrations/`, `schema.prisma`, `models.py`, `*.sql` | `database-design` |
 | API routes, OpenAPI spec, GraphQL schema | `api-design` |
