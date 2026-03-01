@@ -1,6 +1,6 @@
 ---
 name: ui-design
-description: Visual design principles, UI patterns, spacing systems, typography, color, motion, and professional polish for web interfaces
+description: Visual design principles, UI patterns, spacing systems, typography, color, motion, and professional polish for web interfaces. Emphasizes distinctive, non-generic aesthetics that avoid "AI slop" through bold creative choices.
 license: Apache-2.0
 compatibility: opencode
 ---
@@ -8,6 +8,22 @@ compatibility: opencode
 # UI Design Skill
 
 This skill provides visual design patterns and aesthetic guidelines for building professionally designed web interfaces. It complements the `frontend-development` skill which covers engineering implementation.
+
+## Design Thinking
+
+Before coding, understand the context and commit to a BOLD aesthetic direction:
+- **Purpose**: What problem does this interface solve? Who uses it?
+- **Tone**: Pick an extreme: brutally minimal, maximalist chaos, retro-futuristic, organic/natural, luxury/refined, playful/toy-like, editorial/magazine, brutalist/raw, art deco/geometric, soft/pastel, industrial/utilitarian, etc. There are so many flavors to choose from. Use these for inspiration but design one that is true to the aesthetic direction.
+- **Constraints**: Technical requirements (framework, performance, accessibility).
+- **Differentiation**: What makes this UNFORGETTABLE? What's the one thing someone will remember?
+
+**CRITICAL**: Choose a clear conceptual direction and execute it with precision. Bold maximalism and refined minimalism both work — the key is intentionality, not intensity.
+
+Then implement working code (HTML/CSS/JS, React, Vue, etc.) that is:
+- Production-grade and functional
+- Visually striking and memorable
+- Cohesive with a clear aesthetic point-of-view
+- Meticulously refined in every detail
 
 ## When to Use
 
@@ -274,6 +290,17 @@ Generous whitespace signals professionalism. Cramped layouts signal amateur work
 | Marketing / Brand | System font stack | `font-sans` (default Tailwind) |
 | Editorial / Blog | Serif pairing (e.g., Lora + Inter) | Custom `font-serif` in Tailwind config |
 
+### Font Selection Philosophy
+
+Choose distinctive, unexpected, characterful fonts that elevate the interface beyond generic defaults. The font is often the single most impactful aesthetic decision — treat it as a creative choice, not a checkbox.
+
+- **Avoid generic fonts** (Inter, Roboto, Arial, system fonts) unless the project specifically requires them or the design spec mandates them
+- **Pair a distinctive display font with a refined body font** — the contrast between an expressive heading typeface and a clean reading typeface creates visual interest and hierarchy
+- **Seek out characterful options** — explore foundries, Google Fonts beyond page 1, and variable fonts that offer expressive range
+- **Match the font to the tone** — a brutalist interface demands a different typeface than a luxury brand; let the Design Thinking direction guide your choice
+
+> The Font Recommendations table above provides safe defaults for common project types. When the design direction calls for something bolder, use those as a starting point and explore beyond them.
+
 ### Rules
 - **Max 2 font families** — one for headings (optional), one for body
 - **Max 3 weights** — Regular (400), Medium (500), Bold (700)
@@ -281,6 +308,82 @@ Generous whitespace signals professionalism. Cramped layouts signal amateur work
 - **Body line height** — 1.5 minimum for body text, 1.2-1.3 for headings
 
 > **When to deviate:** Branding may require specific fonts. Always test readability at 16px body size. Never go below 14px for body text.
+
+## Aesthetic Philosophy
+
+This section provides creative direction for building interfaces that feel genuinely designed — not generated. Use these guidelines alongside the systematic design spec to create UIs with a clear point-of-view.
+
+### Typography as Identity
+
+Typography is the most powerful tool for establishing visual identity. Choose fonts that are beautiful, unique, and interesting — fonts that someone would notice and remember.
+
+- **Distinctive over safe** — opt for characterful choices that elevate the interface's aesthetics; unexpected, memorable font pairings
+- **Pair intentionally** — a distinctive display font with a refined body font creates contrast and hierarchy
+- **Vary across projects** — NEVER converge on the same "safe" choices (e.g., Space Grotesk) across different designs. Each project deserves its own typographic identity
+
+### Color & Theme
+
+Commit to a cohesive aesthetic rather than a timid, evenly-distributed palette.
+
+- **Use CSS variables** for consistency across the entire interface
+- **Dominant colors with sharp accents** outperform safe, evenly-balanced palettes — pick a strong primary and let accents punctuate, not compete
+- **Dark vs. light is a creative choice** — vary between light and dark themes based on the design direction, not habit
+- **Color should reinforce tone** — a luxury interface uses restrained, rich tones; a playful interface uses saturated, energetic ones
+
+### Motion & Micro-Interactions
+
+Use animations to create delight and communicate state, not to fill space.
+
+- **Prioritize CSS-only solutions** for HTML/vanilla projects
+- **Use Motion library** (Framer Motion) for React when available
+- **Focus on high-impact moments** — one well-orchestrated page load with staggered reveals (`animation-delay`) creates more delight than scattered micro-interactions
+- **Scroll-triggered animations** and hover states that surprise add personality
+- **Entrance choreography** — stagger elements on page load to create a sense of intentional reveal rather than everything appearing at once
+
+### Spatial Composition
+
+Break free from predictable grid layouts when the design direction calls for it.
+
+- **Unexpected layouts** — asymmetry, overlap, diagonal flow, grid-breaking elements
+- **Generous negative space OR controlled density** — both are valid, but choose deliberately
+- **Overlap and layering** — elements that break out of their containers create depth and visual interest
+- **Diagonal and non-linear flow** — guide the eye through unexpected paths when appropriate
+- **Scale contrast** — pair very large elements with very small ones for dramatic hierarchy
+
+### Backgrounds & Visual Details
+
+Create atmosphere and depth rather than defaulting to solid colors.
+
+- **Gradient meshes** — multi-point gradients that create organic, flowing color transitions
+- **Noise textures** — subtle grain overlays that add tactile quality to flat surfaces
+- **Geometric patterns** — repeating shapes that create rhythm and visual texture
+- **Layered transparencies** — overlapping semi-transparent elements for depth
+- **Dramatic shadows** — shadows as a design element, not just elevation
+- **Decorative borders** — borders that contribute to the aesthetic, not just separate content
+- **Custom cursors** — cursor changes that reinforce the interface's personality
+- **Grain overlays** — film-grain effects that add warmth and analog character
+
+### Anti-AI-Slop Guidelines
+
+NEVER produce generic AI-generated aesthetics. Specifically avoid:
+
+- **Overused font families** — Inter, Roboto, Arial, system fonts as a default choice (they're fine when the design spec requires them, but never as a lazy default)
+- **Cliché color schemes** — particularly purple gradients on white backgrounds, the "AI startup" palette
+- **Predictable layouts** — cookie-cutter hero + 3-column features + testimonials without any creative interpretation
+- **Component patterns without character** — every card, button, and section looking like a UI kit demo
+- **Sameness across projects** — if two different projects look like they could be the same site, something went wrong
+
+Interpret creatively and make unexpected choices that feel genuinely designed for the context. No two designs should look the same.
+
+### Execution Complexity
+
+Match implementation complexity to the aesthetic vision:
+
+- **Maximalist designs** need elaborate code with extensive animations, layered effects, rich textures, and detailed interactions. Don't hold back — commit fully to the vision with the code to back it up.
+- **Minimalist or refined designs** need restraint, precision, and careful attention to spacing, typography, and subtle details. Elegance comes from what you leave out and how perfectly you execute what remains.
+- **The key is intentionality** — every CSS property, every animation, every color choice should serve the design direction. Random complexity is worse than simplicity.
+
+> Remember: extraordinary creative work is possible. Don't default to safe choices — commit fully to a distinctive vision and execute it with precision.
 
 ## Color System
 
