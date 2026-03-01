@@ -36,6 +36,17 @@ AI coding assistants are powerful, but without structure they produce inconsiste
  No plan, no traceability                  Plans with acceptance criteria, ships PRs
 ```
 
+### Interview-First Planning
+
+The **Architect agent** doesn't jump straight to solutions. Before creating any plan, it conducts a structured conversation:
+
+1. **Acknowledge & Clarify** — Summarizes your request and asks 3-5 targeted questions about scope, constraints, and success criteria
+2. **Deepen Understanding** — Follows up on unclear areas, identifies risks, presents trade-offs
+3. **Readiness Check** — Presents problem statement + proposed approach + assumptions, asks for your approval
+4. **Plan Review** — Only saves the plan after you explicitly approve it
+
+This ensures you get plans that actually solve the right problem — not AI hallucinations.
+
 ---
 
 ## Quick Start
@@ -62,7 +73,7 @@ User Request
     v
  Architect (read-only planning)
     |
-    |-- read-only analysis -----> @security  @coder  @perf
+     |-- read-only analysis -----> @security  @explore  @perf
     |
     v
  Implement / Fix (execution)
@@ -122,7 +133,7 @@ Handle complex, multi-step work. Use your best model.
 
 | Agent | Role | Key Capabilities |
 |-------|------|-----------------|
-| **architect** | Read-only analysis & planning | Plans with mermaid diagrams, acceptance criteria, NFR analysis. Commits plans and defers branch creation to handoff. Delegates read-only analysis to `@security`, `@coder`, `@perf`. |
+| **architect** | Read-only analysis & planning | Plans with mermaid diagrams, acceptance criteria, NFR analysis. Conducts mandatory requirements interview and plan review before saving. Commits plans and defers branch creation to handoff. Delegates read-only analysis to `@explore`, `@security`, `@perf` only. |
 | **implement** | Full-access development | Skill-aware implementation, REPL loop with ACs, two-phase quality gate, parallel sub-agent orchestration, task finalizer. |
 | **fix** | Quick turnaround bug fixes | Rapid diagnosis, scope-based quality gate, optional REPL loop. Delegates deep debugging to `@debug`. |
 
@@ -134,11 +145,12 @@ Focused specialists launched **automatically** by primary agents. Each auto-load
 |-------|------|-----------------|-------------|
 | **@testing** | Test writing, suite execution, coverage | `testing-strategies` | Implement (standard+high), Fix (low+standard+high) |
 | **@security** | OWASP audit, secrets scan, threat modeling | `security-hardening` | Implement (standard+high), Fix (standard+high), Architect (read-only) |
+| **@explore** | Read-only codebase exploration | — | Architect only (read-only analysis) |
 | **@audit** | Code quality, tech debt, pattern review | `code-quality` | Implement (standard+high) |
 | **@docs-writer** | Auto-documentation generation | — | Implement (standard+high) |
 | **@perf** | Complexity analysis, N+1 detection, bundle impact | `performance-optimization` | Implement (high), Fix (high), Architect (read-only) |
 | **@devops** | CI/CD validation, IaC review | `deployment-automation` | Implement (high, or infra files changed) |
-| **@coder** | Cross-layer implementation, feasibility | Per-layer skills | Implement (3+ layers), Architect (feasibility analysis) |
+| **@coder** | Cross-layer implementation, feasibility | Per-layer skills | Implement (3+ layers) |
 | **@refactor** | Behavior-preserving restructuring | `design-patterns` + `code-quality` | Implement (refactor plans) |
 | **@debug** | Root cause analysis, troubleshooting | `testing-strategies` | Fix (complex issues) |
 
