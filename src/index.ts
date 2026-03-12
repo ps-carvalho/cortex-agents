@@ -1,4 +1,5 @@
 import type { Plugin } from "@opencode-ai/plugin";
+import { CortexCodeBridge } from "./utils/cortex-code-bridge.js";
 
 // Import all tool modules
 import * as cortex from "./tools/cortex";
@@ -11,6 +12,7 @@ import * as task from "./tools/task";
 import * as github from "./tools/github";
 import * as repl from "./tools/repl";
 import * as qualityGate from "./tools/quality-gate";
+import * as engineTools from "./tools/engine";
 
 // ─── Agent Descriptions (for handover toasts) ───────────────────────────────
 
@@ -190,6 +192,8 @@ function extractErrorMessage(
 // ─── Plugin Entry ────────────────────────────────────────────────────────────
 
 export const CortexPlugin: Plugin = async (ctx) => {
+  const bridge = new CortexCodeBridge();
+
   return {
     tool: {
       // Cortex tools - .cortex directory management
@@ -243,6 +247,10 @@ export const CortexPlugin: Plugin = async (ctx) => {
 
       // Quality gate aggregation tool
       quality_gate_summary: qualityGate.qualityGateSummary,
+
+      // Engine-backed tools
+      cortex_get_skill: engineTools.getSkill,
+      cortex_list_agents: engineTools.listAgents,
     },
 
     // ── Post-execution toast notifications ────────────────────────────────
@@ -286,6 +294,76 @@ export const CortexPlugin: Plugin = async (ctx) => {
 
     // ── Event-driven notifications ───────────────────────────────────────
     async event({ event }) {
+      // ── Cortex Code bridge (fire-and-forget, no-op outside Cortex Code) ──
+      if (bridge.isActive) {
+        // session.status busy → agent started working
+        if (
+          event.type === "session.status" &&
+          event.properties.status.type === "busy"
+        ) {
+          bridge.taskStarted();
+        }
+
+        // session.status idle → agent waiting for user input
+        if (
+          event.type === "session.status" &&
+          event.properties.status.type === "idle"
+        ) {
+          bridge.interactionNeeded("input");
+        }
+
+        // session.idle → all processing complete
+        if (event.type === "session.idle") {
+          bridge.taskFinished();
+        }
+
+        // session.error → forward error
+        if (event.type === "session.error") {
+          const rawError = event.properties.error;
+          const error =
+            rawError &&
+            typeof rawError === "object" &&
+            "name" in rawError &&
+            typeof (rawError as Record<string, unknown>).name === "string"
+              ? (rawError as { name: string; data: Record<string, unknown> })
+              : undefined;
+          bridge.error(extractErrorMessage(error));
+        }
+
+        // message.part.updated — text content
+        if (
+          event.type === "message.part.updated" &&
+          event.properties.part.type === "text"
+        ) {
+          bridge.text(event.properties.part.text);
+        }
+
+        // message.part.updated — tool call
+        if (
+          event.type === "message.part.updated" &&
+          event.properties.part.type === "tool"
+        ) {
+          const part = event.properties.part;
+          bridge.toolCall(part.callID, part.tool, part.metadata);
+        }
+
+        // message.updated — token/cost tracking (assistant messages with usage)
+        if (
+          event.type === "message.updated" &&
+          event.properties.info.role === "assistant"
+        ) {
+          const msg = event.properties.info;
+          if ("tokens" in msg && msg.tokens) {
+            bridge.usage(
+              msg.tokens.input ?? 0,
+              msg.tokens.output ?? 0,
+              msg.cost ?? 0,
+              "modelID" in msg ? (msg.modelID as string) : undefined,
+            );
+          }
+        }
+      }
+
       try {
         // Agent handover notifications
         if (

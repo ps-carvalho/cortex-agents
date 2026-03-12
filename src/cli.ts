@@ -13,6 +13,7 @@ import {
   getPrimaryChoices,
   getSubagentChoices,
 } from "./registry.js";
+import { CortexEngine } from "./engine/index.js";
 
 const PLUGIN_NAME = "cortex-agents";
 
@@ -243,9 +244,116 @@ function removeAgentsAndSkills(targetDir: string): void {
   }
 }
 
+// ─── Target flag parsing ─────────────────────────────────────────────────────
+
+function parseTargetFlag(): string | null {
+  const args = process.argv.slice(3);
+  const idx = args.indexOf("--target");
+  if (idx === -1 || idx + 1 >= args.length) return null;
+  return args[idx + 1];
+}
+
+function parseScopeFlag(): "global" | "project" {
+  const args = process.argv.slice(3);
+  if (args.includes("--project")) return "project";
+  return "global";
+}
+
+// ─── Engine-backed sync command ─────────────────────────────────────────────
+
+function sync(): void {
+  const target = parseTargetFlag();
+  if (!target) {
+    console.error("Error: --target flag is required for sync.");
+    console.error("Usage: npx cortex-agents sync --target claude|opencode|codex|gemini");
+    process.exit(1);
+  }
+
+  console.log(`\nSyncing to ${target}...\n`);
+
+  const engine = new CortexEngine();
+  engine.initialize();
+
+  try {
+    const result = engine.syncTarget(target);
+
+    console.log(`  Agents written: ${result.agentsWritten.length}`);
+    for (const id of result.agentsWritten) {
+      console.log(`    - ${id}`);
+    }
+
+    if (result.skillsWritten.length > 0) {
+      console.log(`  Skills written: ${result.skillsWritten.length}`);
+    }
+
+    if (result.instructionsWritten) {
+      console.log(`  Instructions file: written`);
+    }
+
+    if (result.errors.length > 0) {
+      console.log(`\n  Errors:`);
+      for (const err of result.errors) {
+        console.log(`    - ${err}`);
+      }
+    }
+
+    console.log(`\nDone! Sync complete for ${target}.\n`);
+  } finally {
+    engine.close();
+  }
+}
+
+// ─── Engine-backed install for specific targets ─────────────────────────────
+
+function installTarget(target: string): void {
+  console.log(`\nInstalling ${PLUGIN_NAME} v${VERSION} for ${target}...\n`);
+
+  const engine = new CortexEngine();
+  const seedResult = engine.initialize();
+
+  if (seedResult) {
+    console.log(`  Database seeded: ${seedResult.agents} agents, ${seedResult.skills} skills, ${seedResult.models} models`);
+  }
+
+  try {
+    const scope = parseScopeFlag();
+    const result = engine.syncTarget(target, { scope });
+
+    console.log(`  Agents written: ${result.agentsWritten.length}`);
+    if (result.skillsWritten.length > 0) {
+      console.log(`  Skills written: ${result.skillsWritten.length}`);
+    }
+    if (result.instructionsWritten) {
+      console.log(`  Instructions file: written`);
+    }
+
+    // Record installation
+    const installPath = scope === "project" ? process.cwd() : "global";
+    engine.recordInstallation(target, scope, installPath, VERSION);
+
+    if (result.errors.length > 0) {
+      console.log(`\n  Errors:`);
+      for (const err of result.errors) {
+        console.log(`    - ${err}`);
+      }
+    }
+
+    console.log(`\nDone! ${target} target installed.\n`);
+  } finally {
+    engine.close();
+  }
+}
+
 // ─── Commands ────────────────────────────────────────────────────────────────
 
 function install(): void {
+  // Check for --target flag: use engine-backed install
+  const target = parseTargetFlag();
+  if (target) {
+    return installTarget(target);
+  }
+
+  // Default: original opencode install behavior
   console.log(`\nInstalling ${PLUGIN_NAME} v${VERSION}...\n`);
 
   const globalDir = getGlobalDir();
@@ -765,6 +873,47 @@ function status(): void {
     );
   }
 
+  // Engine database status
+  try {
+    const engine = new CortexEngine();
+    engine.initialize();
+    const dbAgents = engine.listAgents();
+    const dbSkills = engine.listSkills();
+    const dbModels = engine.listModels();
+    const dbTargets = engine.listTargets();
+    const installations = engine.getInstallations();
+
+    console.log("\nEngine Database:");
+    console.log(`  Agents: ${dbAgents.length} (${dbAgents.filter(a => a.mode === 'primary').length} primary, ${dbAgents.filter(a => a.mode === 'subagent').length} subagent)`);
+    console.log(`  Skills: ${dbSkills.length}`);
+    console.log(`  Models: ${dbModels.length}`);
+    console.log(`  Targets: ${dbTargets.map(t => t.id).join(", ")}`);
+
+    if (installations.length > 0) {
+      console.log(`  Installations:`);
+      for (const inst of installations) {
+        console.log(`    - ${inst.target_id} (${inst.scope}) v${inst.version} at ${inst.path}`);
+      }
+    }
+
+    engine.close();
+  } catch {
+    // Engine not yet initialized — skip silently
+  }
+
+  // Cortex Code integration detection
+  const cortexEventUrl = process.env.CORTEX_EVENT_URL;
+  const cortexTaskId = process.env.CORTEX_TASK_ID;
+  const cortexCode = process.env.CORTEX_CODE;
+
+  if (cortexEventUrl && cortexTaskId && cortexCode) {
+    console.log("\nCortex Code: DETECTED");
+    console.log(`  Event URL: ${cortexEventUrl}`);
+    console.log(`  Task ID:   ${cortexTaskId}`);
+  } else {
+    console.log("\nCortex Code: Not detected");
+  }
+
   if (!isInstalled) {
     console.log(`\nRun 'npx ${PLUGIN_NAME} install' to add to config.`);
   }
@@ -781,22 +930,26 @@ USAGE:
   npx ${PLUGIN_NAME} <command> [options]
 
 COMMANDS:
-  install              Install plugin, agents, and skills into OpenCode config
-  configure            Interactive model selection (global)
-  configure --project  Interactive model selection (per-project, saves to .opencode/)
-  configure --reset    Reset model configuration to OpenCode defaults
-  configure --project --reset  Reset per-project model configuration
-  uninstall            Remove plugin, agents, skills, and model config
-  status               Show installation and model configuration status
-  help                 Show this help message
+  install                         Install plugin, agents, and skills into OpenCode config
+  install --target <target>       Install to a specific CLI target (engine-backed)
+  sync --target <target>          Re-render agents from DB to target config dir
+  configure                       Interactive model selection (global)
+  configure --project             Interactive model selection (per-project)
+  configure --reset               Reset model configuration to defaults
+  uninstall                       Remove plugin, agents, skills, and model config
+  status                          Show installation, DB stats, and model configuration
+  help                            Show this help message
 
 EXAMPLES:
-  npx ${PLUGIN_NAME} install                    # Install plugin
+  npx ${PLUGIN_NAME} install                    # Install plugin (OpenCode default)
+  npx ${PLUGIN_NAME} install --target claude    # Install to Claude Code
+  npx ${PLUGIN_NAME} install --target opencode  # Install to OpenCode
+  npx ${PLUGIN_NAME} install --target codex     # Install to Codex CLI
+  npx ${PLUGIN_NAME} install --target gemini    # Install to Gemini CLI
+  npx ${PLUGIN_NAME} sync --target claude       # Re-sync agents to Claude Code
   npx ${PLUGIN_NAME} configure                  # Global model selection
-  npx ${PLUGIN_NAME} configure --project        # Per-project models (.opencode/models.json)
-  npx ${PLUGIN_NAME} configure --reset          # Reset global models
-  npx ${PLUGIN_NAME} configure --project --reset # Reset per-project models
-  npx ${PLUGIN_NAME} status                     # Check status
+  npx ${PLUGIN_NAME} configure --project        # Per-project models
+  npx ${PLUGIN_NAME} status                     # Check status + DB stats
 
 AGENTS:
   Primary (architect, implement, fix):
@@ -840,6 +993,9 @@ const command = process.argv[2] || "help";
 switch (command) {
   case "install":
     install();
+    break;
+  case "sync":
+    sync();
     break;
   case "configure":
     configure().catch((err) => {

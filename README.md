@@ -2,7 +2,7 @@
   <img src="https://img.shields.io/badge/cortex-agents-111?style=for-the-badge&labelColor=111&color=4d96ff" alt="cortex-agents" height="40">
 </p>
 
-<h3 align="center">Structured AI development workflows for <a href="https://opencode.ai">OpenCode</a>.<br>Plan. Build. Ship. With discipline.</h3>
+<h3 align="center">Structured AI development workflows for <a href="https://opencode.ai">OpenCode</a>, <a href="https://claude.ai">Claude Code</a>, <a href="https://github.com/openai/codex">Codex CLI</a>, and <a href="https://github.com/google-gemini/gemini-cli">Gemini CLI</a>.<br>Plan. Build. Ship. With discipline.</h3>
 
 <p align="center">
   <a href="https://www.npmjs.com/package/cortex-agents"><img src="https://img.shields.io/npm/v/cortex-agents.svg?style=flat-square&color=4d96ff" alt="npm version"></a>
@@ -52,12 +52,28 @@ This ensures you get plans that actually solve the right problem — not AI hall
 ## Quick Start
 
 ```bash
-npx cortex-agents install       # Add plugin + agents + skills
-npx cortex-agents configure     # Pick your models interactively
-# Restart OpenCode — done.
+# OpenCode (default)
+npx cortex-agents install              # Add plugin + agents + skills
+npx cortex-agents configure            # Pick your models interactively
+
+# Claude Code
+npx cortex-agents install --target claude   # Render agents + CLAUDE.md
+npx cortex-agents sync --target claude      # Re-sync after DB changes
+
+# Codex CLI
+npx cortex-agents install --target codex    # Render AGENTS.md instructions
+
+# Gemini CLI
+npx cortex-agents install --target gemini   # Render agents + GEMINI.md
+
+# Multiple targets
+npx cortex-agents install --target opencode
+npx cortex-agents install --target claude
+npx cortex-agents install --target codex
+npx cortex-agents install --target gemini
 ```
 
-Your OpenCode session now has **12 specialized agents**, **33 tools**, and **17 domain skills**.
+Your sessions now have **12 specialized agents**, **35 tools**, and **17 domain skills**.
 
 > **Built-in Agent Replacement** — Cortex automatically disables OpenCode's native `build` and `plan` agents (replaced by `implement` and `architect`). The `architect` agent becomes the default, promoting a planning-first workflow. Native agents are fully restored on `uninstall`.
 
@@ -125,6 +141,35 @@ Not every change needs a full audit. The quality gate scales with risk:
 
 ---
 
+## Cortex Engine
+
+Cortex Agents is backed by a **SQLite data model** at `~/.config/cortex-agents/cortex.db`. Agents, skills, and model configurations are stored in a single source of truth. Target-specific **renderers** transform DB records into each CLI's native format on `install` or `sync`.
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│                       CortexEngine                           │
+│          AgentStore │ SkillStore │ Models │ Targets           │
+│                  SQLite (cortex.db)                           │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────────┐    │
+│  │  Claude   │ │ OpenCode │ │  Codex   │ │   Gemini     │    │
+│  │ Renderer  │ │ Renderer │ │ Renderer │ │  Renderer    │    │
+│  └──────────┘ └──────────┘ └──────────┘ └──────────────┘    │
+└──────────────────────────────────────────────────────────────┘
+```
+
+This means you can install once, then render to as many targets as you need. Four renderers ship out of the box:
+
+| Target | Config Dir | Agent Format | Instructions File |
+|--------|-----------|--------------|-------------------|
+| **Claude Code** | `~/.claude` | Per-agent `.md` with Claude frontmatter | `CLAUDE.md` |
+| **OpenCode** | `~/.config/opencode` | Per-agent `.md` with tools/permission YAML | — |
+| **Codex CLI** | `~/.codex` | Single `agents/AGENTS.md` | `agents/AGENTS.md` |
+| **Gemini CLI** | `~/.gemini` | Per-agent `.md` with Gemini frontmatter | `GEMINI.md` |
+
+Changes to agents or skills in the DB are picked up by `sync` without re-downloading anything.
+
+---
+
 ## Agents
 
 ### Primary Agents (3)
@@ -181,7 +226,7 @@ This ensures visual consistency across all agents and sessions — no more one-o
 
 ## Tools
 
-33 tools bundled and auto-registered. No configuration needed.
+35 tools bundled and auto-registered. No configuration needed.
 
 <table>
 <tr><td width="50%">
@@ -240,6 +285,13 @@ The architect uses these to browse your backlog and seed plans from real issues.
 - `repl_summary` — Markdown results table with AC satisfaction for PR body
 
 State persists to `.cortex/repl-state.json` — survives context compaction, session restarts, and agent switches.
+
+</td></tr>
+<tr><td colspan="2">
+
+**Engine (NEW)**
+- `cortex_get_skill` — Retrieve domain skill content from DB
+- `cortex_list_agents` — List all registered agents with tools
 
 </td></tr>
 </table>
@@ -410,20 +462,22 @@ your-project/
 ## CLI Reference
 
 ```bash
-npx cortex-agents install                      # Install plugin, agents, and skills
-npx cortex-agents configure                    # Global model selection
-npx cortex-agents configure --project          # Per-project model selection
-npx cortex-agents configure --reset            # Reset global models
-npx cortex-agents configure --project --reset  # Reset per-project models
-npx cortex-agents uninstall                    # Clean removal of everything
-npx cortex-agents status                       # Show installation and model status
+npx cortex-agents install                              # Install plugin, agents, and skills (OpenCode default)
+npx cortex-agents install --target claude|opencode|codex|gemini  # Install to specific CLI target
+npx cortex-agents sync --target claude|opencode|codex|gemini     # Re-render from DB to target
+npx cortex-agents configure                            # Global model selection
+npx cortex-agents configure --project                  # Per-project model selection
+npx cortex-agents configure --reset                    # Reset global models
+npx cortex-agents configure --project --reset          # Reset per-project models
+npx cortex-agents uninstall                            # Clean removal of everything
+npx cortex-agents status                               # Show installation, model, and DB stats
 ```
 
 ---
 
 ## Requirements
 
-- [OpenCode](https://opencode.ai) >= 1.0.0
+- [OpenCode](https://opencode.ai) >= 1.0.0, [Claude Code](https://claude.ai), [Codex CLI](https://github.com/openai/codex), or [Gemini CLI](https://github.com/google-gemini/gemini-cli)
 - Node.js >= 18.0.0
 - Git (for branch/worktree features)
 - [GitHub CLI](https://cli.github.com/) (optional — for PR creation and issue integration)
@@ -441,7 +495,7 @@ git clone https://github.com/ps-carvalho/cortex-agents.git
 cd cortex-agents
 npm install
 npm run build
-npm test                    # 447 tests, all should pass
+npm test                    # All tests should pass
 ```
 
 ### Local Development
@@ -465,7 +519,22 @@ src/
   index.ts                   Plugin entry point, tool registration, event hooks
   registry.ts                Agent/model registry constants
   cli.ts                     CLI (install, configure, uninstall, status)
+  engine/
+    index.ts                 CortexEngine facade
+    db.ts                    SQLite connection factory
+    schema.ts                DDL, migrations
+    types.ts                 TypeScript interfaces
+    agents.ts / skills.ts    Data stores
+    models.ts / targets.ts
+    seed.ts                  Import .opencode/ → DB
+    renderers/
+      index.ts               Renderer interface + registry
+      claude.ts              Claude Code renderer
+      opencode.ts            OpenCode renderer
+      codex.ts               Codex CLI renderer
+      gemini.ts              Gemini CLI renderer
   tools/
+    engine.ts                Engine-backed MCP tools
     repl.ts                  REPL loop tools (init, status, report, resume, summary)
     quality-gate.ts          Quality gate aggregation tool
     cortex.ts                Project initialization tools
@@ -545,5 +614,5 @@ test: add or update tests
 
 <p align="center">
   <br>
-  <sub>Built for the <a href="https://opencode.ai">OpenCode</a> community</sub>
+  <sub>Built for the <a href="https://opencode.ai">OpenCode</a>, <a href="https://claude.ai">Claude Code</a>, <a href="https://github.com/openai/codex">Codex CLI</a>, and <a href="https://github.com/google-gemini/gemini-cli">Gemini CLI</a> communities</sub>
 </p>

@@ -1,7 +1,7 @@
 {
   "name": "cortex-agents",
-  "version": "4.1.2",
-  "description": "Supercharge OpenCode with structured workflows, intelligent agents, and automated development practices",
+  "version": "5.0.0",
+  "description": "Structured AI development workflows for OpenCode and Claude Code — plan, build, ship with discipline",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -55,12 +55,14 @@
   },
   "devDependencies": {
     "@opencode-ai/plugin": "^1.0.0",
+    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^20.0.0",
     "@types/prompts": "^2.4.9",
     "typescript": "^5.0.0",
     "vitest": "^3.0.0"
   },
   "dependencies": {
+    "better-sqlite3": "^12.6.2",
     "prompts": "^2.4.2"
   }
 }
