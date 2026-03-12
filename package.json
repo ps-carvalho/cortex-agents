@@ -1,6 +1,6 @@
 {
   "name": "cortex-agents",
-  "version": "5.0.0",
+  "version": "5.0.1",
   "description": "Structured AI development workflows for OpenCode and Claude Code — plan, build, ship with discipline",
   "type": "module",
   "main": "dist/index.js",
