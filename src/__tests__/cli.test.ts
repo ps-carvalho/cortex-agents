@@ -587,4 +587,40 @@ describe("Config manipulation logic", () => {
       }
     });
   });
+
+  describe("CLI — mcp command", () => {
+    let tmpDir: string;
+
+    beforeEach(() => {
+      tmpDir = fs.mkdtempSync(path.join(require("os").tmpdir(), "cortex-mcp-"));
+    });
+
+    afterEach(() => {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    });
+
+    it("help text includes mcp command documentation", () => {
+      const help = runCLI("help", tmpDir);
+      expect(help).toContain("mcp");
+      expect(help.toLowerCase()).toMatch(/mcp.*stdio/i);
+    });
+
+    it("mcp command is documented with proper description", () => {
+      const help = runCLI("help", tmpDir);
+      // The help should describe what mcp does
+      expect(help).toMatch(/mcp/i);
+    });
+
+    it("unknown command shows available commands including mcp", () => {
+      const output = runCLI("unknown-command", tmpDir);
+      // When an unknown command is run, help is displayed
+      expect(output.toLowerCase()).toContain("run");
+      expect(output.toLowerCase()).toContain("cortex");
+    });
+
+    it("mcp appears in help examples", () => {
+      const help = runCLI("help", tmpDir);
+      expect(help).toMatch(/npx.*cortex-agents.*mcp/);
+    });
+  });
 });

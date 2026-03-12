@@ -14,6 +14,7 @@ import {
   getSubagentChoices,
 } from "./registry.js";
 import { CortexEngine } from "./engine/index.js";
+import { startMCPServer } from "./mcp-server.js";
 
 const PLUGIN_NAME = "cortex-agents";
 
@@ -920,6 +921,18 @@ function status(): void {
   console.log();
 }
 
+
+// ─── MCP Server ──────────────────────────────────────────────────────────────
+
+async function mcp(): Promise<void> {
+  try {
+    await startMCPServer();
+  } catch (error) {
+    console.error("MCP server error:", error);
+    process.exit(1);
+  }
+}
+
 function help(): void {
   console.log(`${PLUGIN_NAME} v${VERSION}
 
@@ -938,6 +951,7 @@ COMMANDS:
   configure --reset               Reset model configuration to defaults
   uninstall                       Remove plugin, agents, skills, and model config
   status                          Show installation, DB stats, and model configuration
+  mcp                             Start MCP server on stdio (for Gemini, Codex, Claude CLIs)
   help                            Show this help message
 
 EXAMPLES:
@@ -950,6 +964,7 @@ EXAMPLES:
   npx ${PLUGIN_NAME} configure                  # Global model selection
   npx ${PLUGIN_NAME} configure --project        # Per-project models
   npx ${PLUGIN_NAME} status                     # Check status + DB stats
+  npx ${PLUGIN_NAME} mcp                        # Start MCP server (stdio)
 
 AGENTS:
   Primary (architect, implement, fix):
@@ -1009,6 +1024,13 @@ switch (command) {
   case "status":
     status();
     break;
+  case "mcp":
+    mcp().catch((err) => {
+      console.error("MCP server failed:", err.message);
+      process.exit(1);
+    });
+    break;
+
   case "help":
   case "--help":
   case "-h":
